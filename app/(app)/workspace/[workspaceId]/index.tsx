@@ -21,6 +21,7 @@ import { WorkspaceSidebar } from "@/features/workspace/components/workspace-side
 import { useWorkspaceStore } from "@/features/workspace/store";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useCreateSession, useSendPrompt } from "@/features/agent/hooks/use-agent-session";
+import { useAgentStore } from "@/features/agent/store";
 import { requestBrowserNotificationPermission } from "@/features/agent/browser-notifications";
 
 type PendingSessionRequest = {
@@ -40,6 +41,7 @@ export default function WorkspaceScreen() {
   const clearWorkspaceNotification = useWorkspaceStore(
     (s) => s.clearWorkspaceNotification,
   );
+  const setAlertMessage = useAgentStore((s) => s.setAlertMessage);
   const createSession = useCreateSession();
   const sendPrompt = useSendPrompt();
   const [sending, setSending] = useState(false);
@@ -117,6 +119,7 @@ export default function WorkspaceScreen() {
   const handleSend = useCallback(
     async (text: string) => {
       if (!workspaceId || sending) return;
+      setAlertMessage(null);
       requestBrowserNotificationPermission();
       setSending(true);
       try {
@@ -125,10 +128,15 @@ export default function WorkspaceScreen() {
         router.replace(`/workspace/${workspaceId}/s/${sessionId}`);
       } catch (e) {
         console.error('Failed to create session or send prompt:', e);
+        setAlertMessage(
+          e instanceof Error
+            ? e.message
+            : "Failed to create session or send prompt",
+        );
         setSending(false);
       }
     },
-    [workspaceId, sending, ensureSession, sendPrompt, router],
+    [workspaceId, sending, ensureSession, sendPrompt, router, setAlertMessage],
   );
 
   const isDark = colorScheme === "dark";

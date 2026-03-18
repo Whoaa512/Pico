@@ -103,6 +103,7 @@ function mergeConsecutiveToolCalls(messages: ChatMessage[]): {
 
     const hasText =
       msg.text.length > 0 ||
+      (!!msg.errorMessage && msg.errorMessage.length > 0) ||
       (!!msg.thinking && msg.thinking.length > 0);
 
     if (hasText || !anchor || msg.isStreaming) {

@@ -1,113 +1,127 @@
 import { Fonts } from "@/constants/theme";
 import type { useMarkdownHookOptions } from "react-native-marked";
 
-export const markedDarkOptions: useMarkdownHookOptions = {
-  colorScheme: "dark",
-  theme: {
+type MarkdownTheme = NonNullable<useMarkdownHookOptions["theme"]>;
+type MarkdownStyles = NonNullable<useMarkdownHookOptions["styles"]>;
+
+function createTheme(colors: {
+  text: string;
+  link: string;
+  border: string;
+  code: string;
+}): MarkdownTheme {
+  return {
     colors: {
       background: "transparent",
-      text: "#CCCCCC",
-      link: "#58a6ff",
-      border: "#2A2A2A",
-      code: "#1A1A1A",
-      codeText: "#c9d1d9",
-      blockquoteBorder: "#333333",
-      blockquoteBackground: "transparent",
-      hr: "#2A2A2A",
+      text: colors.text,
+      link: colors.link,
+      border: colors.border,
+      code: colors.code,
     },
     spacing: {
-      paragraph: 4,
-      heading: 4,
-      code: 8,
-      blockquote: 8,
-      list: 2,
-      listItem: 2,
-      table: 8,
-      tableCell: 4,
-      hr: 8,
+      xs: 2,
+      s: 4,
+      m: 8,
+      l: 12,
     },
-  },
-  styles: {
+  };
+}
+
+function createStyles(colors: {
+  text: string;
+  textStrong: string;
+  textMuted: string;
+  link: string;
+  border: string;
+  code: string;
+  codeText: string;
+}): MarkdownStyles {
+  return {
+    text: {
+      fontSize: 14,
+      lineHeight: 22,
+      fontFamily: Fonts.sans,
+      color: colors.text,
+    },
     h1: {
       fontSize: 20,
       lineHeight: 28,
       fontFamily: Fonts.sansBold,
       fontWeight: "bold",
-      color: "#E8E8E8",
+      color: colors.textStrong,
     },
     h2: {
       fontSize: 18,
       lineHeight: 26,
       fontFamily: Fonts.sansBold,
       fontWeight: "bold",
-      color: "#E8E8E8",
+      color: colors.textStrong,
     },
     h3: {
       fontSize: 16,
       lineHeight: 24,
       fontFamily: Fonts.sansSemiBold,
       fontWeight: "600",
-      color: "#E8E8E8",
+      color: colors.textStrong,
     },
     h4: {
       fontSize: 15,
       lineHeight: 22,
       fontFamily: Fonts.sansSemiBold,
       fontWeight: "600",
-      color: "#E8E8E8",
+      color: colors.textStrong,
     },
     h5: {
       fontSize: 14,
       lineHeight: 22,
       fontFamily: Fonts.sansSemiBold,
       fontWeight: "600",
-      color: "#E8E8E8",
+      color: colors.textStrong,
     },
     h6: {
       fontSize: 14,
       lineHeight: 22,
       fontFamily: Fonts.sansMedium,
       fontWeight: "600",
-      color: "#E8E8E8",
+      color: colors.textStrong,
     },
     paragraph: {
-      fontSize: 14,
-      lineHeight: 22,
-      fontFamily: Fonts.sans,
-      color: "#CCCCCC",
+      paddingVertical: 4,
     },
     strong: {
       fontFamily: Fonts.sansBold,
       fontWeight: "bold",
-      color: "#E8E8E8",
+      color: colors.textStrong,
     },
     em: {
       fontFamily: Fonts.sansItalic,
       fontStyle: "italic",
     },
-    del: {
+    strikethrough: {
       fontFamily: Fonts.sans,
       textDecorationLine: "line-through",
-      color: "#999999",
+      color: colors.textMuted,
     },
     link: {
       fontFamily: Fonts.sans,
-      color: "#58a6ff",
+      fontStyle: "normal",
+      color: colors.link,
     },
     codespan: {
       fontFamily: Fonts.mono,
+      fontStyle: "normal",
       fontSize: 12,
-      color: "#c9d1d9",
-      backgroundColor: "#1A1A1A",
+      color: colors.codeText,
+      backgroundColor: colors.code,
     },
     code: {
-      backgroundColor: "#1A1A1A",
+      backgroundColor: colors.code,
       borderRadius: 8,
       padding: 12,
     },
     blockquote: {
       borderLeftWidth: 3,
-      borderLeftColor: "#333333",
+      borderLeftColor: colors.border,
       paddingLeft: 12,
     },
     list: {
@@ -117,156 +131,61 @@ export const markedDarkOptions: useMarkdownHookOptions = {
       fontSize: 14,
       lineHeight: 22,
       fontFamily: Fonts.sans,
-      color: "#CCCCCC",
+      color: colors.text,
     },
     hr: {
       marginVertical: 8,
       height: 1,
-      backgroundColor: "#2A2A2A",
+      backgroundColor: colors.border,
     },
     table: {
-      borderColor: "#2A2A2A",
+      borderColor: colors.border,
+    },
+    tableRow: {
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
     },
     tableCell: {
-      fontFamily: Fonts.sans,
-      fontSize: 13,
-      lineHeight: 18,
-      color: "#CCCCCC",
+      paddingVertical: 4,
+      paddingHorizontal: 8,
     },
-  },
+  };
+}
+
+export const markedDarkOptions: useMarkdownHookOptions = {
+  colorScheme: "dark",
+  theme: createTheme({
+    text: "#CCCCCC",
+    link: "#58a6ff",
+    border: "#2A2A2A",
+    code: "#1A1A1A",
+  }),
+  styles: createStyles({
+    text: "#CCCCCC",
+    textStrong: "#E8E8E8",
+    textMuted: "#999999",
+    link: "#58a6ff",
+    border: "#333333",
+    code: "#1A1A1A",
+    codeText: "#c9d1d9",
+  }),
 };
 
 export const markedLightOptions: useMarkdownHookOptions = {
   colorScheme: "light",
-  theme: {
-    colors: {
-      background: "transparent",
-      text: "#1A1A1A",
-      link: "#0366d6",
-      border: "#E8E8E8",
-      code: "#F6F6F6",
-      codeText: "#24292e",
-      blockquoteBorder: "#DDDDDD",
-      blockquoteBackground: "transparent",
-      hr: "#E8E8E8",
-    },
-    spacing: {
-      paragraph: 4,
-      heading: 4,
-      code: 8,
-      blockquote: 8,
-      list: 2,
-      listItem: 2,
-      table: 8,
-      tableCell: 4,
-      hr: 8,
-    },
-  },
-  styles: {
-    h1: {
-      fontSize: 20,
-      lineHeight: 28,
-      fontFamily: Fonts.sansBold,
-      fontWeight: "bold",
-      color: "#1A1A1A",
-    },
-    h2: {
-      fontSize: 18,
-      lineHeight: 26,
-      fontFamily: Fonts.sansBold,
-      fontWeight: "bold",
-      color: "#1A1A1A",
-    },
-    h3: {
-      fontSize: 16,
-      lineHeight: 24,
-      fontFamily: Fonts.sansSemiBold,
-      fontWeight: "600",
-      color: "#1A1A1A",
-    },
-    h4: {
-      fontSize: 15,
-      lineHeight: 22,
-      fontFamily: Fonts.sansSemiBold,
-      fontWeight: "600",
-      color: "#1A1A1A",
-    },
-    h5: {
-      fontSize: 14,
-      lineHeight: 22,
-      fontFamily: Fonts.sansSemiBold,
-      fontWeight: "600",
-      color: "#1A1A1A",
-    },
-    h6: {
-      fontSize: 14,
-      lineHeight: 22,
-      fontFamily: Fonts.sansMedium,
-      fontWeight: "600",
-      color: "#1A1A1A",
-    },
-    paragraph: {
-      fontSize: 14,
-      lineHeight: 22,
-      fontFamily: Fonts.sans,
-      color: "#1A1A1A",
-    },
-    strong: {
-      fontFamily: Fonts.sansBold,
-      fontWeight: "bold",
-      color: "#111111",
-    },
-    em: {
-      fontFamily: Fonts.sansItalic,
-      fontStyle: "italic",
-    },
-    del: {
-      fontFamily: Fonts.sans,
-      textDecorationLine: "line-through",
-      color: "#666666",
-    },
-    link: {
-      fontFamily: Fonts.sans,
-      color: "#0366d6",
-    },
-    codespan: {
-      fontFamily: Fonts.mono,
-      fontSize: 12,
-      color: "#24292e",
-      backgroundColor: "#F4F4F4",
-    },
-    code: {
-      backgroundColor: "#F6F6F6",
-      borderRadius: 8,
-      padding: 12,
-    },
-    blockquote: {
-      borderLeftWidth: 3,
-      borderLeftColor: "#DDDDDD",
-      paddingLeft: 12,
-    },
-    list: {
-      gap: 2,
-    },
-    li: {
-      fontSize: 14,
-      lineHeight: 22,
-      fontFamily: Fonts.sans,
-      color: "#1A1A1A",
-    },
-    hr: {
-      marginVertical: 8,
-      height: 1,
-      backgroundColor: "#E8E8E8",
-    },
-    table: {
-      borderColor: "#E8E8E8",
-    },
-    tableCell: {
-      fontFamily: Fonts.sans,
-      fontSize: 13,
-      lineHeight: 18,
-      color: "#1A1A1A",
-    },
-  },
+  theme: createTheme({
+    text: "#1A1A1A",
+    link: "#0366d6",
+    border: "#E8E8E8",
+    code: "#F6F6F6",
+  }),
+  styles: createStyles({
+    text: "#1A1A1A",
+    textStrong: "#1A1A1A",
+    textMuted: "#666666",
+    link: "#0366d6",
+    border: "#DDDDDD",
+    code: "#F6F6F6",
+    codeText: "#24292e",
+  }),
 };

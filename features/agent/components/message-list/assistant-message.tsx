@@ -6,7 +6,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { ChevronDown, ChevronRight, Brain } from "lucide-react-native";
+import { ChevronDown, ChevronRight, Brain, AlertCircle } from "lucide-react-native";
 import { useMarkdown, type useMarkdownHookOptions } from "react-native-marked";
 import Animated, {
   useAnimatedStyle,
@@ -90,6 +90,10 @@ export function AssistantMessage({
   const hasThinking = !!message.thinking && message.thinking.length > 0;
   const hasToolCalls =
     !!effectiveToolCalls && effectiveToolCalls.length > 0;
+  const hasError =
+    message.stopReason === "error" &&
+    !!message.errorMessage &&
+    message.errorMessage.length > 0;
 
   const markdownOptions = useMemo<useMarkdownHookOptions>(
     () => (isDark ? markedDarkOptions : markedLightOptions),
@@ -193,6 +197,42 @@ export function AssistantMessage({
         </View>
       )}
 
+      {hasError && (
+        <View
+          style={[
+            styles.errorBlock,
+            {
+              backgroundColor: isDark ? "#171313" : "#FCF8F7",
+            },
+          ]}
+        >
+          <View style={styles.errorHeader}>
+            <AlertCircle
+              size={14}
+              color={isDark ? "#C28B84" : "#B35B52"}
+              strokeWidth={1.9}
+            />
+            <Text
+              style={[
+                styles.errorLabel,
+                { color: isDark ? "#CDA7A2" : "#9C5B54" },
+              ]}
+            >
+              Request Failed
+            </Text>
+          </View>
+          <Text
+            style={[
+              styles.errorText,
+              { color: isDark ? "#CDBAB7" : "#6C5552" },
+            ]}
+            selectable
+          >
+            {message.errorMessage}
+          </Text>
+        </View>
+      )}
+
       {message.text.length > 0 && (
         <View style={styles.markdownWrap}>
           {markdownElements.map((el, i) => (
@@ -247,6 +287,27 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: Fonts.sans,
     lineHeight: 18,
+  },
+  errorBlock: {
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    gap: 6,
+  },
+  errorHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  errorLabel: {
+    fontSize: 11,
+    fontFamily: Fonts.sansMedium,
+    letterSpacing: 0.2,
+  },
+  errorText: {
+    fontSize: 12.5,
+    lineHeight: 19,
+    fontFamily: Fonts.sans,
   },
   markdownWrap: {
     gap: 4,

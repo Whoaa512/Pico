@@ -443,6 +443,7 @@ async fn async_main() -> anyhow::Result<()> {
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .route("/healthz", get(routes::health::healthz))
         .route("/version", get(routes::health::version))
+        .route("/ws/stream", get(routes::agent::ws_stream))
         .nest("/api", api_routes)
         .fallback(any(web::serve_web))
         .layer(TraceLayer::new_for_http())

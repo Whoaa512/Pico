@@ -17,10 +17,14 @@ export function ConnectionStatusBanner() {
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const connection = useAgentStore((s) => s.connection);
+  const alertMessage = useAgentStore((s) => s.alertMessage);
   const requestReconnect = useAgentStore((s) => s.requestReconnect);
-  const visible =
+  const setAlertMessage = useAgentStore((s) => s.setAlertMessage);
+  const hasConnectionIssue =
     connection.status === "reconnecting" ||
     connection.status === "disconnected";
+  const visible =
+    hasConnectionIssue || !!alertMessage;
   const isReconnecting = connection.status === "reconnecting";
 
   const [mounted, setMounted] = useState(visible);
@@ -66,8 +70,12 @@ export function ConnectionStatusBanner() {
   }, [connection.nextRetryAt, isReconnecting]);
 
   const handleTap = useCallback(() => {
-    requestReconnect();
-  }, [requestReconnect]);
+    if (hasConnectionIssue) {
+      requestReconnect();
+      return;
+    }
+    setAlertMessage(null);
+  }, [hasConnectionIssue, requestReconnect, setAlertMessage]);
 
   if (!mounted) return null;
 
@@ -79,8 +87,8 @@ export function ConnectionStatusBanner() {
   const retryCountdownSeconds =
     retryDelayMs !== null ? Math.max(1, Math.ceil(retryDelayMs / 1000)) : 0;
 
-  let message = "Server disconnected";
-  if (isReconnecting) {
+  let message = alertMessage ?? "Server disconnected";
+  if (hasConnectionIssue && isReconnecting) {
     message =
       connection.retryAttempt > 1
         ? `Reconnecting… (attempt ${connection.retryAttempt})`
@@ -91,7 +99,7 @@ export function ConnectionStatusBanner() {
           ? `Retrying in ${retryCountdownSeconds}s (attempt ${connection.retryAttempt})`
           : `Retrying in ${retryCountdownSeconds}s`;
     }
-  } else if (connection.lastDisconnectReason) {
+  } else if (hasConnectionIssue && connection.lastDisconnectReason) {
     message = connection.lastDisconnectReason;
   }
 
@@ -130,7 +138,13 @@ export function ConnectionStatusBanner() {
               />
             ) : null}
             <Text style={styles.retryButtonText}>
-              {isWaitingToRetry ? "Retry now" : isAttemptInFlight ? "Retrying…" : "Retry"}
+              {hasConnectionIssue
+                ? isWaitingToRetry
+                  ? "Retry now"
+                  : isAttemptInFlight
+                    ? "Retrying…"
+                    : "Retry"
+                : "Dismiss"}
             </Text>
           </View>
         </Pressable>

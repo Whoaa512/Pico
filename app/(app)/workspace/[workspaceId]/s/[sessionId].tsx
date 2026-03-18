@@ -80,6 +80,7 @@ export default function SessionScreen() {
   const pendingExtensionUiRequest = useAgentStore(
     (s) => s.pendingExtensionUiRequests[sessionId ?? ""] ?? null,
   );
+  const setAlertMessage = useAgentStore((s) => s.setAlertMessage);
   const connectionStatus = useAgentStore((s) => s.connection.status);
   const inputBlockedByConnection =
     connectionStatus === "reconnecting" || connectionStatus === "disconnected";
@@ -96,22 +97,39 @@ export default function SessionScreen() {
       options?: { queueBehavior?: PromptStreamingBehavior },
     ) => {
       if (!sessionId || inputBlockedByConnection) return;
+      setAlertMessage(null);
       requestBrowserNotificationPermission();
-      sendRef.current({
-        sessionId,
-        message: text,
-        streamingBehavior: options?.queueBehavior ?? (isStreaming ? "steer" : undefined),
-        workspaceId: workspaceId ?? undefined,
-        sessionFile: sessionFile ?? undefined,
-      });
+      sendRef.current(
+        {
+          sessionId,
+          message: text,
+          streamingBehavior: options?.queueBehavior ?? (isStreaming ? "steer" : undefined),
+          workspaceId: workspaceId ?? undefined,
+          sessionFile: sessionFile ?? undefined,
+        },
+        {
+          onError: (error) => {
+            setAlertMessage(
+              error instanceof Error ? error.message : "Failed to send prompt",
+            );
+          },
+        },
+      );
     },
-    [inputBlockedByConnection, sessionId, isStreaming, workspaceId, sessionFile],
+    [inputBlockedByConnection, sessionId, isStreaming, workspaceId, sessionFile, setAlertMessage],
   );
 
   const handleAbort = useCallback(() => {
     if (!sessionId) return;
-    abortAgent.mutate(sessionId);
-  }, [sessionId, abortAgent]);
+    setAlertMessage(null);
+    abortAgent.mutate(sessionId, {
+      onError: (error) => {
+        setAlertMessage(
+          error instanceof Error ? error.message : "Failed to abort",
+        );
+      },
+    });
+  }, [sessionId, abortAgent, setAlertMessage]);
 
   const isDark = colorScheme === "dark";
   const editorBg = isDark ? "#151515" : "#FAFAFA";

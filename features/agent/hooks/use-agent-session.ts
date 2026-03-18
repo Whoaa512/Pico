@@ -11,7 +11,7 @@ import {
   getState as apiGetState,
   getMessages as apiGetMessages,
 } from "@/features/api/generated/sdk.gen";
-import { unwrapApiData } from "@/features/api/unwrap";
+import { extractApiErrorMessage, unwrapApiData } from "@/features/api/unwrap";
 import { parsePendingExtensionUiRequest } from "../extension-ui";
 import { useAgentStore } from "../store";
 import type { AgentSessionInfo } from "@/features/api/generated/types.gen";
@@ -115,7 +115,14 @@ export function useCreateSession() {
           session_path: params.sessionPath,
         },
       });
-      if (result.error) throw new Error("Failed to create session");
+      if (result.error) {
+        throw new Error(
+          extractApiErrorMessage(
+            result.error,
+            extractApiErrorMessage(result.data, "Failed to create session"),
+          ),
+        );
+      }
       return unwrapApiData(result.data) as AgentSessionInfo;
     },
     onSuccess: (data, variables) => {
@@ -166,7 +173,14 @@ export function useSendPrompt() {
                   session_file: params.sessionFile,
                 },
               });
-      if (result.error) throw new Error("Failed to send prompt");
+      if (result.error) {
+        throw new Error(
+          extractApiErrorMessage(
+            result.error,
+            extractApiErrorMessage(result.data, "Failed to send prompt"),
+          ),
+        );
+      }
       return unwrapApiData(result.data);
     },
   });
@@ -178,7 +192,14 @@ export function useAbortAgent() {
       const result = await apiAbort({
         body: { session_id: sessionId },
       });
-      if (result.error) throw new Error("Failed to abort");
+      if (result.error) {
+        throw new Error(
+          extractApiErrorMessage(
+            result.error,
+            extractApiErrorMessage(result.data, "Failed to abort"),
+          ),
+        );
+      }
       return unwrapApiData(result.data);
     },
   });
@@ -202,7 +223,17 @@ export function useSendExtensionUiResponse() {
           cancelled: params.cancelled,
         },
       });
-      if (result.error) throw new Error("Failed to send extension UI response");
+      if (result.error) {
+        throw new Error(
+          extractApiErrorMessage(
+            result.error,
+            extractApiErrorMessage(
+              result.data,
+              "Failed to send extension UI response",
+            ),
+          ),
+        );
+      }
       return unwrapApiData(result.data);
     },
     onSuccess: (_data, variables) => {

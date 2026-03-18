@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { usePathname } from "expo-router";
+import { Platform } from "react-native";
 import EventSource, { type EventSourceEvent } from "../event-source";
 import { useAuthStore } from "@/features/auth/store";
 import { useServersStore } from "@/features/servers/store";
@@ -12,7 +13,18 @@ import type { AgentConnectionState, StreamEvent } from "../types";
 const RECONNECT_BASE_MS = 1000;
 const RECONNECT_MAX_MS = 30000;
 
-type StreamErrorEvent = EventSourceEvent;
+type StreamTransportKind = "sse" | "ws";
+
+type StreamErrorEvent =
+  | ({ transport: "sse" } & EventSourceEvent)
+  | {
+      transport: "ws";
+      type: "close" | "error";
+      code?: number;
+      reason?: string;
+      message?: string;
+      wasClean?: boolean;
+    };
 
 function isViewingWorkspace(
   pathname: string | null,
@@ -46,8 +58,34 @@ function parseDisconnectMessage(message: string | undefined): string | null {
   return trimmed;
 }
 
+function defaultTransport(): StreamTransportKind {
+  return "sse";
+}
+
+function isAuthDisconnect(event?: StreamErrorEvent): boolean {
+  if (!event) return false;
+
+  if (event.transport === "ws") {
+    return event.type === "close" && (event.code === 4401 || event.code === 4403);
+  }
+
+  return event.type === "error" && (event.xhrStatus === 401 || event.xhrStatus === 403);
+}
+
 function isRetryableDisconnect(event?: StreamErrorEvent): boolean {
   if (!event) return true;
+  if (event.transport === "ws") {
+    if (event.type === "error") {
+      return true;
+    }
+
+    if (event.code === 4401 || event.code === 4403) {
+      return false;
+    }
+
+    return true;
+  }
+
   if (event.type === "timeout" || event.type === "exception") {
     return true;
   }
@@ -55,17 +93,33 @@ function isRetryableDisconnect(event?: StreamErrorEvent): boolean {
     return true;
   }
 
-  if (event.xhrStatus === 0) return true;
-  if (event.xhrStatus === 401 || event.xhrStatus === 403) {
+  const status = event.xhrStatus ?? 0;
+  if (status === 0) return true;
+  if (status === 401 || status === 403) {
     return false;
   }
 
-  return event.xhrStatus >= 500 || event.xhrStatus === 408;
+  return status >= 500 || status === 408;
 }
 
 function getDisconnectReason(event?: StreamErrorEvent): string {
   if (!event) {
     return "The connection to the server was lost.";
+  }
+
+  if (event.transport === "ws") {
+    if (event.type === "error") {
+      return event.message || "The websocket connection failed.";
+    }
+
+    if (event.code === 4401 || event.code === 4403) {
+      return "Authentication expired. Sign in again to reconnect.";
+    }
+
+    return (
+      parseDisconnectMessage(event.reason ?? event.message) ??
+      "The websocket connection was lost."
+    );
   }
 
   if (event.type === "timeout") {
@@ -77,10 +131,11 @@ function getDisconnectReason(event?: StreamErrorEvent): string {
   }
 
   if (event.type === "error") {
-    if (event.xhrStatus === 401 || event.xhrStatus === 403) {
+    const status = event.xhrStatus ?? 0;
+    if (status === 401 || status === 403) {
       return "Authentication expired. Sign in again to reconnect.";
     }
-    if (event.xhrStatus >= 500) {
+    if (status >= 500) {
       return "The server is temporarily unavailable.";
     }
 
@@ -91,6 +146,63 @@ function getDisconnectReason(event?: StreamErrorEvent): string {
   }
 
   return "The connection to the server was lost.";
+}
+
+function buildStreamUrl(
+  serverAddress: string,
+  path: string,
+  params: Record<string, string | number | null | undefined>,
+) {
+  const url = new URL(serverAddress);
+  const basePath = url.pathname.endsWith("/")
+    ? url.pathname.slice(0, -1)
+    : url.pathname;
+  url.pathname = `${basePath}${path}`;
+
+  for (const [key, value] of Object.entries(params)) {
+    if (value === null || value === undefined) continue;
+    url.searchParams.set(key, String(value));
+  }
+
+  return url.toString();
+}
+
+function buildSseStreamUrl(serverAddress: string, from: number | null) {
+  return buildStreamUrl(serverAddress, "/api/stream", { from });
+}
+
+function buildWebSocketStreamUrl(
+  serverAddress: string,
+  from: number | null,
+) {
+  const url = new URL(
+    buildStreamUrl(serverAddress, "/ws/stream", {
+      from,
+    }),
+  );
+  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  return url.toString();
+}
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isStreamEventPayload(value: unknown): value is StreamEvent {
+  return (
+    isObjectRecord(value) &&
+    typeof value.id === "number" &&
+    typeof value.session_id === "string" &&
+    typeof value.type === "string" &&
+    typeof value.timestamp === "number" &&
+    isObjectRecord(value.data) &&
+    (value.workspace_id === undefined || typeof value.workspace_id === "string")
+  );
+}
+
+function extractStreamEvents(value: unknown): StreamEvent[] {
+  const items = Array.isArray(value) ? value : [value];
+  return items.filter(isStreamEventPayload);
 }
 
 function createConnectionState(
@@ -127,6 +239,7 @@ export function useAgentStream() {
   const retryCountRef = useRef(0);
   const pathnameRef = useRef<string | null>(pathname ?? null);
   const streamTargetRef = useRef<string | null>(null);
+  const preferredTransportRef = useRef<StreamTransportKind>(defaultTransport());
 
   useEffect(() => {
     pathnameRef.current = pathname ?? null;
@@ -142,6 +255,7 @@ export function useAgentStream() {
       streamTargetRef.current = nextTarget;
       lastEventIdRef.current = null;
       retryCountRef.current = 0;
+      preferredTransportRef.current = defaultTransport();
       if (previousTarget !== null) {
         useAgentStore.getState().setConnectionState(createConnectionState("idle"));
       }
@@ -154,7 +268,10 @@ export function useAgentStream() {
       return;
     }
 
+    const streamServerAddress = serverAddress;
+    const streamAuthToken = authToken;
     let es: EventSource | null = null;
+    let ws: WebSocket | null = null;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let mounted = true;
     let disconnectHandled = false;
@@ -177,6 +294,66 @@ export function useAgentStream() {
         es.close();
         es = null;
       }
+      if (ws) {
+        ws.onopen = null;
+        ws.onmessage = null;
+        ws.onerror = null;
+        ws.onclose = null;
+        ws.close();
+        ws = null;
+      }
+    }
+
+    function processStreamMessage(rawData: string) {
+      try {
+        const payload: unknown = JSON.parse(rawData);
+        const streamEvents = extractStreamEvents(payload);
+        if (streamEvents.length === 0) {
+          return;
+        }
+
+        lastEventIdRef.current = streamEvents[streamEvents.length - 1]!.id;
+        useAgentStore.getState().processStreamEvents(streamEvents);
+
+        for (const streamEvent of streamEvents) {
+          const sid = streamEvent.session_id;
+          const eventType = streamEvent.type;
+          const explicitWorkspaceId = streamEvent.workspace_id?.trim()
+            ? streamEvent.workspace_id
+            : undefined;
+          const workspaceStore = useWorkspaceStore.getState();
+          const workspaceId =
+            explicitWorkspaceId ?? workspaceStore.getWorkspaceForSession(sid);
+
+          if (explicitWorkspaceId) {
+            workspaceStore.registerSessionWorkspace(
+              sid,
+              explicitWorkspaceId,
+            );
+          }
+
+          if (eventType === "turn_end") {
+            handleSessionCompletion(streamEvent, workspaceId);
+          }
+        }
+      } catch {}
+    }
+
+    function fallbackToSse() {
+      if (
+        Platform.OS !== "web" ||
+        !mounted ||
+        preferredTransportRef.current === "sse"
+      ) {
+        return false;
+      }
+
+      preferredTransportRef.current = "sse";
+      cleanup();
+      clearReconnectTimer();
+      disconnectHandled = false;
+      connect();
+      return true;
     }
 
     function scheduleReconnect(errorEvent?: StreamErrorEvent) {
@@ -189,10 +366,7 @@ export function useAgentStream() {
       const disconnectedAt =
         useAgentStore.getState().connection.disconnectedAt ?? Date.now();
 
-      if (
-        errorEvent?.type === "error" &&
-        (errorEvent.xhrStatus === 401 || errorEvent.xhrStatus === 403)
-      ) {
+      if (isAuthDisconnect(errorEvent)) {
         setConnectionState(
           createConnectionState("reconnecting", {
             retryAttempt: retryCountRef.current,
@@ -358,16 +532,92 @@ export function useAgentStream() {
         ),
       );
 
-      const fromParam =
-        lastEventIdRef.current !== null
-          ? `?from=${lastEventIdRef.current}`
-          : "";
-      const url = `${serverAddress}/api/stream${fromParam}`;
+      const from = lastEventIdRef.current;
+      const transport = preferredTransportRef.current;
+
+      if (transport === "ws") {
+        const url = buildWebSocketStreamUrl(
+          streamServerAddress,
+          from,
+        );
+        let opened = false;
+
+        try {
+          ws =
+            Platform.OS === "web"
+              ? new WebSocket(url, [
+                  "pi-stream-v1",
+                  `auth.${streamAuthToken}`,
+                ])
+              : (new (globalThis as any).WebSocket(url, undefined, {
+                  headers: {
+                    Authorization: `Bearer ${streamAuthToken}`,
+                  },
+                }) as WebSocket);
+        } catch {
+          if (fallbackToSse()) {
+            return;
+          }
+          scheduleReconnect({
+            transport: "ws",
+            type: "error",
+            message: "The websocket connection failed.",
+          });
+          return;
+        }
+
+        ws.onopen = () => {
+          if (!mounted || currentConnection !== connectionInstance) return;
+          opened = true;
+          retryCountRef.current = 0;
+          setConnectionState(createConnectionState("connected"));
+        };
+
+        ws.onmessage = (event) => {
+          if (!mounted || currentConnection !== connectionInstance) return;
+          if (typeof event.data !== "string") return;
+          processStreamMessage(event.data);
+        };
+
+        ws.onerror = () => {
+          if (!mounted || currentConnection !== connectionInstance) return;
+          if (!opened && fallbackToSse()) {
+            return;
+          }
+          scheduleReconnect({
+            transport: "ws",
+            type: "error",
+            message: "The websocket connection failed.",
+          });
+        };
+
+        ws.onclose = (event) => {
+          if (!mounted || currentConnection !== connectionInstance) return;
+          const disconnectEvent: StreamErrorEvent = {
+            transport: "ws",
+            type: "close",
+            code: event.code,
+            reason: event.reason,
+            wasClean: event.wasClean,
+          };
+          if (
+            !opened &&
+            !isAuthDisconnect(disconnectEvent) &&
+            fallbackToSse()
+          ) {
+            return;
+          }
+          scheduleReconnect(disconnectEvent);
+        };
+        return;
+      }
+
+      const url = buildSseStreamUrl(streamServerAddress, from);
 
       es = new EventSource(url, {
         headers: {
           Authorization: {
-            toString: () => `Bearer ${authToken}`,
+            toString: () => `Bearer ${streamAuthToken}`,
           },
         },
         pollingInterval: 0,
@@ -388,36 +638,12 @@ export function useAgentStream() {
         ) {
           return;
         }
-        try {
-          const streamEvent: StreamEvent = JSON.parse(event.data);
-          lastEventIdRef.current = streamEvent.id;
-          useAgentStore.getState().processStreamEvent(streamEvent);
-
-          const sid = streamEvent.session_id;
-          const eventType = streamEvent.type;
-          const explicitWorkspaceId = streamEvent.workspace_id?.trim()
-            ? streamEvent.workspace_id
-            : undefined;
-          const workspaceStore = useWorkspaceStore.getState();
-          const workspaceId =
-            explicitWorkspaceId ?? workspaceStore.getWorkspaceForSession(sid);
-
-          if (explicitWorkspaceId) {
-            workspaceStore.registerSessionWorkspace(
-              sid,
-              explicitWorkspaceId,
-            );
-          }
-
-          if (eventType === "turn_end") {
-            handleSessionCompletion(streamEvent, workspaceId);
-          }
-        } catch {}
+        processStreamMessage(event.data);
       });
 
       es.addEventListener("error", (event) => {
         if (!mounted || currentConnection !== connectionInstance) return;
-        scheduleReconnect(event);
+        scheduleReconnect({ transport: "sse", ...event });
       });
 
       es.addEventListener("close", () => {

@@ -158,3 +158,9 @@ pub struct AgentExtensionUiResponseRequest {
 pub struct StreamQuery {
     pub from: Option<u64>,
 }
+
+#[derive(Debug, Deserialize)]
+pub struct WsStreamQuery {
+    pub from: Option<u64>,
+    pub access_token: Option<String>,
+}

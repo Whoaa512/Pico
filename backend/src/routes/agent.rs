@@ -1,7 +1,10 @@
-use std::convert::Infallible;
+use std::{convert::Infallible, time::Duration};
 
-use axum::extract::{Path, Query, State};
-use axum::http::{HeaderMap, StatusCode};
+use axum::extract::{
+    ws::{CloseFrame, Message, WebSocket, WebSocketUpgrade},
+    Path, Query, State,
+};
+use axum::http::{header, HeaderMap, StatusCode};
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::IntoResponse;
 use axum::Json;
@@ -10,10 +13,15 @@ use serde_json::{json, Value};
 use crate::app::AppState;
 use crate::models::agent::*;
 use crate::models::ApiResponse;
-use crate::routes::auth::require_auth;
+use crate::routes::auth::{extract_token, require_auth, validate_access_token};
 use crate::services::agent::{AgentSessionInfo, ActiveSessionSummary};
 use crate::services::runtime;
 use crate::services::session;
+
+const WS_KEEPALIVE_SECS: u64 = 20;
+const WS_MAX_BATCH_EVENTS: usize = 32;
+const WS_CLOSE_UNAUTHORIZED: u16 = 4401;
+const WS_CLOSE_INTERNAL_ERROR: u16 = 1011;
 
 fn auth_err(code: StatusCode, msg: String) -> (StatusCode, Json<ApiResponse<Value>>) {
     (code, Json(ApiResponse::err(msg)))
@@ -104,6 +112,185 @@ async fn auto_touch(
         .touch_session(session_id, session_file.to_string(), workspace_id.to_string(), workspace.path)
         .await
         .ok()
+}
+
+fn stream_event_json<T: serde::Serialize>(event: &T) -> String {
+    serde_json::to_string(event).unwrap_or_default()
+}
+
+fn stream_event_value<T: serde::Serialize>(event: &T) -> Value {
+    serde_json::to_value(event).unwrap_or(Value::Null)
+}
+
+fn stream_lagged_json(missed_events: u64) -> String {
+    serde_json::json!({
+        "type": "stream_lagged",
+        "missed_events": missed_events,
+    })
+    .to_string()
+}
+
+fn stream_lagged_value(missed_events: u64) -> Value {
+    serde_json::json!({
+        "type": "stream_lagged",
+        "missed_events": missed_events,
+    })
+}
+
+async fn close_ws(mut socket: WebSocket, code: u16, reason: String) {
+    let _ = socket
+        .send(Message::Close(Some(CloseFrame {
+            code: code.into(),
+            reason: reason.chars().take(123).collect::<String>().into(),
+        })))
+        .await;
+}
+
+async fn send_ws_batch(socket: &mut WebSocket, payloads: Vec<Value>) -> bool {
+    if payloads.is_empty() {
+        return true;
+    }
+
+    let payload = if payloads.len() == 1 {
+        payloads.into_iter().next().unwrap_or(Value::Null)
+    } else {
+        Value::Array(payloads)
+    };
+
+    socket
+        .send(Message::Text(payload.to_string().into()))
+        .await
+        .is_ok()
+}
+
+fn extract_ws_protocol_token(headers: &HeaderMap) -> Option<String> {
+    headers
+        .get(header::SEC_WEBSOCKET_PROTOCOL)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| {
+            value
+                .split(',')
+                .map(|entry| entry.trim())
+                .find_map(|entry| entry.strip_prefix("auth.").map(|token| token.to_string()))
+        })
+}
+
+fn drain_ws_pending_payloads(
+    rx: &mut tokio::sync::broadcast::Receiver<crate::services::agent::StreamEvent>,
+    payloads: &mut Vec<Value>,
+) -> bool {
+    let mut closed = false;
+
+    while payloads.len() < WS_MAX_BATCH_EVENTS {
+        match rx.try_recv() {
+            Ok(event) => payloads.push(stream_event_value(&event)),
+            Err(tokio::sync::broadcast::error::TryRecvError::Lagged(n)) => {
+                payloads.push(stream_lagged_value(n.into()));
+            }
+            Err(tokio::sync::broadcast::error::TryRecvError::Empty) => break,
+            Err(tokio::sync::broadcast::error::TryRecvError::Closed) => {
+                closed = true;
+                break;
+            }
+        }
+    }
+
+    closed
+}
+
+async fn handle_ws_stream(
+    mut socket: WebSocket,
+    state: AppState,
+    access_token: Option<String>,
+    from: Option<u64>,
+) {
+    let token = match access_token {
+        Some(token) => token,
+        None => {
+            close_ws(
+                socket,
+                WS_CLOSE_UNAUTHORIZED,
+                "Missing authorization token".to_string(),
+            )
+            .await;
+            return;
+        }
+    };
+
+    if let Err((status, msg)) = validate_access_token(&state, &token) {
+        let close_code = if status == StatusCode::UNAUTHORIZED {
+            WS_CLOSE_UNAUTHORIZED
+        } else {
+            WS_CLOSE_INTERNAL_ERROR
+        };
+        close_ws(socket, close_code, msg).await;
+        return;
+    }
+
+    let replay_events = state.agent.get_buffered_events(from).await;
+    let mut replay_payloads = Vec::with_capacity(WS_MAX_BATCH_EVENTS);
+    for event in replay_events {
+        replay_payloads.push(stream_event_value(&event));
+        if replay_payloads.len() >= WS_MAX_BATCH_EVENTS {
+            if !send_ws_batch(&mut socket, replay_payloads).await {
+                return;
+            }
+            replay_payloads = Vec::with_capacity(WS_MAX_BATCH_EVENTS);
+        }
+    }
+    if !replay_payloads.is_empty()
+        && !send_ws_batch(&mut socket, replay_payloads).await
+    {
+        return;
+    }
+
+    let mut rx = state.agent.subscribe();
+    let mut keepalive =
+        tokio::time::interval(Duration::from_secs(WS_KEEPALIVE_SECS));
+    keepalive.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+
+    loop {
+        tokio::select! {
+            _ = keepalive.tick() => {
+                if socket.send(Message::Ping(Vec::new().into())).await.is_err() {
+                    break;
+                }
+            }
+            incoming = socket.recv() => {
+                match incoming {
+                    Some(Ok(Message::Ping(payload))) => {
+                        if socket.send(Message::Pong(payload)).await.is_err() {
+                            break;
+                        }
+                    }
+                    Some(Ok(Message::Close(_))) | None => break,
+                    Some(Ok(Message::Pong(_)))
+                    | Some(Ok(Message::Text(_)))
+                    | Some(Ok(Message::Binary(_))) => {}
+                    Some(Err(_)) => break,
+                }
+            }
+            result = rx.recv() => {
+                let mut payloads = match result {
+                    Ok(event) => vec![stream_event_value(&event)],
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                        vec![stream_lagged_value(n.into())]
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                };
+
+                let closed = drain_ws_pending_payloads(&mut rx, &mut payloads);
+
+                if !send_ws_batch(&mut socket, payloads).await {
+                    break;
+                }
+
+                if closed {
+                    break;
+                }
+            }
+        }
+    }
 }
 
 // --- Session Management ---
@@ -355,7 +542,7 @@ pub async fn stream(
 
     let stream = async_stream::stream! {
         for event in replay_events {
-            let data = serde_json::to_string(&event).unwrap_or_default();
+            let data = stream_event_json(&event);
             yield Ok::<_, Infallible>(
                 Event::default().id(event.id.to_string()).data(data),
             );
@@ -364,18 +551,14 @@ pub async fn stream(
         loop {
             match rx.recv().await {
                 Ok(event) => {
-                    let data = serde_json::to_string(&event).unwrap_or_default();
+                    let data = stream_event_json(&event);
                     yield Ok::<_, Infallible>(
                         Event::default().id(event.id.to_string()).data(data),
                     );
                 }
                 Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
-                    let warning = serde_json::json!({
-                        "type": "stream_lagged",
-                        "missed_events": n,
-                    });
                     yield Ok::<_, Infallible>(
-                        Event::default().data(warning.to_string()),
+                        Event::default().data(stream_lagged_json(n.into())),
                     );
                 }
                 Err(_) => break,
@@ -386,6 +569,19 @@ pub async fn stream(
     Sse::new(stream)
         .keep_alive(KeepAlive::default())
         .into_response()
+}
+
+pub async fn ws_stream(
+    ws: WebSocketUpgrade,
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(params): Query<WsStreamQuery>,
+) -> impl IntoResponse {
+    let access_token = extract_token(&headers)
+        .or_else(|| extract_ws_protocol_token(&headers))
+        .or(params.access_token);
+    ws.protocols(["pi-stream-v1"])
+        .on_upgrade(move |socket| handle_ws_stream(socket, state, access_token, params.from))
 }
 
 // --- Prompting ---

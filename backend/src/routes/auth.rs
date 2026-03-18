@@ -254,6 +254,17 @@ pub fn extract_token(headers: &axum::http::HeaderMap) -> Option<String> {
         .map(|s| s.to_string())
 }
 
+pub fn validate_access_token(
+    state: &AppState,
+    token: &str,
+) -> Result<String, (StatusCode, String)> {
+    state
+        .db
+        .validate_access_token(token)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Auth check failed: {e}")))?
+        .ok_or((StatusCode::UNAUTHORIZED, "Session invalid or expired".to_string()))
+}
+
 pub async fn require_auth(
     state: &AppState,
     headers: &axum::http::HeaderMap,
@@ -261,9 +272,5 @@ pub async fn require_auth(
     let token = extract_token(headers)
         .ok_or((StatusCode::UNAUTHORIZED, "Missing authorization token".to_string()))?;
 
-    state
-        .db
-        .validate_access_token(&token)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Auth check failed: {e}")))?
-        .ok_or((StatusCode::UNAUTHORIZED, "Session invalid or expired".to_string()))
+    validate_access_token(state, &token)
 }
