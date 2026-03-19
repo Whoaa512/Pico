@@ -66,6 +66,27 @@ The server starts on port **5454** and prints a QR code in the terminal:
 
 You're connected! You can now create workspaces, start coding sessions, and interact with the pi-coding-agent from your phone.
 
+## Screenshots
+
+### Mobile - Workspace & Sessions
+<p float="left">
+  <img src="docs/screenshots/mobile-workspace-home.png" width="250" alt="Workspace home screen" />
+  <img src="docs/screenshots/mobile-workspaces-sessions.jpeg" width="250" alt="Workspaces and session list" />
+</p>
+
+### Mobile - Chat & Settings
+<p float="left">
+  <img src="docs/screenshots/mobile-chat-mode.jpeg" width="250" alt="Chat mode with custom model" />
+  <img src="docs/screenshots/mobile-settings.jpeg" width="250" alt="Settings - agent, custom models, appearance" />
+</p>
+
+### Tablet & Desktop
+<p float="left">
+  <img src="docs/screenshots/tablet-session-sidebar.jpg" width="400" alt="Tablet view with session sidebar" />
+</p>
+
+<img src="docs/screenshots/desktop-code-session.png" width="700" alt="Desktop view - code session with file preview" />
+
 ## Configuration
 
 The `config.toml` file supports these options:
