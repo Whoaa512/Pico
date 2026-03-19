@@ -1026,7 +1026,7 @@ impl AgentManager {
             return;
         }
 
-        Self::signal_process(pid, libc::SIGTERM);
+        Self::signal_process(pid, Self::SIGTERM);
         if Self::wait_for_exit(
             exit_rx,
             Duration::from_secs(SHUTDOWN_GRACE_SECS),
@@ -1037,7 +1037,7 @@ impl AgentManager {
         }
 
         tracing::warn!("Escalating pi process {pid} to SIGKILL");
-        Self::signal_process(pid, libc::SIGKILL);
+        Self::signal_process(pid, Self::SIGKILL);
         let _ = Self::wait_for_exit(
             exit_rx,
             Duration::from_secs(SHUTDOWN_GRACE_SECS),
@@ -1066,10 +1066,27 @@ impl AgentManager {
         .is_ok()
     }
 
-    fn signal_process(pid: u32, signal: libc::c_int) {
+    #[cfg(unix)]
+    const SIGTERM: i32 = libc::SIGTERM;
+    #[cfg(unix)]
+    const SIGKILL: i32 = libc::SIGKILL;
+    #[cfg(windows)]
+    const SIGTERM: i32 = 15;
+    #[cfg(windows)]
+    const SIGKILL: i32 = 9;
+
+    #[cfg(unix)]
+    fn signal_process(pid: u32, signal: i32) {
         unsafe {
             libc::kill(pid as libc::pid_t, signal);
         }
+    }
+
+    #[cfg(windows)]
+    fn signal_process(pid: u32, _signal: i32) {
+        let _ = std::process::Command::new("taskkill")
+            .args(["/PID", &pid.to_string(), "/F"])
+            .output();
     }
 
     async fn resolve_session_id(&self, session_id: &str) -> String {
