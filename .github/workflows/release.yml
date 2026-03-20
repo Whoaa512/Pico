@@ -180,8 +180,21 @@ jobs:
         with:
           path: artifacts
 
+      - name: Rename artifacts to include platform
+        run: |
+          mkdir -p release-assets
+          for dir in artifacts/pi-server-*; do
+            name=$(basename "$dir")
+            if [[ "$name" == *.exe ]]; then
+              cp "$dir"/pi-server.exe "release-assets/$name"
+            else
+              cp "$dir"/pi-server "release-assets/$name"
+            fi
+          done
+          cp artifacts/pi-ui-android/*.apk release-assets/pi-ui-android.apk
+
       - name: Upload assets to release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.release-please.outputs.tag_name }}
-          files: artifacts/**/*
+          files: release-assets/*
