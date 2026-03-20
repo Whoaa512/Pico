@@ -323,6 +323,8 @@ export class PiClient {
 
   async createAgentSession(params: { workspaceId: string; sessionPath?: string }) {
     const info = await this.api.createAgentSession(params);
+    const subject = this._getOrCreateSessionSubject(info.session_id);
+    subject.next({ ...createEmptySessionState(), isReady: true });
     this.loadSessions(params.workspaceId, { page: 1 });
     return info;
   }

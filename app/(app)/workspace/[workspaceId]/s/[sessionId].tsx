@@ -57,11 +57,11 @@ export default function SessionScreen() {
   const session = (sessions as Array<{ id: string; file_path: string }>)?.find(
     (s) => s.id === sessionId,
   );
-  const sessionFile = session?.file_path ?? null;
+  const sessionFile = session?.file_path || sessionId || "";
 
   const agentSession = useAgentSession(sessionId ?? null, {
     workspaceId: workspaceId ?? "",
-    sessionFile: sessionFile ?? "",
+    sessionFile,
   });
 
   const connection = useConnection();
@@ -159,9 +159,13 @@ export default function SessionScreen() {
           {hasMessages && sessionId ? (
             <MessageList key={sessionId} sessionId={sessionId} />
           ) : agentSession.isLoading || (!agentSession.isReady && sessionId) ? (
-            <View style={styles.emptyCenter}>
-              <ActivityIndicator size="small" />
-            </View>
+            Platform.OS === "ios" ? (
+              <View style={styles.emptyCenter}>
+                <ActivityIndicator size="small" />
+              </View>
+            ) : (
+              <ChatShimmer />
+            )
           ) : (
             <View style={styles.emptyCenter} />
           )}

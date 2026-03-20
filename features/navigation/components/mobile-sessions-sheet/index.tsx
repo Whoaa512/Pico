@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   Easing,
@@ -9,16 +9,15 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { SquarePen, RefreshCw } from 'lucide-react-native';
 import { usePathname, useRouter } from 'expo-router';
 
-import { Colors, Fonts } from '@/constants/theme';
+import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { usePiClient } from '@pi-ui/client';
 import { useWorkspaceStore } from '@/features/workspace/store';
 import { useSessions } from '@/features/workspace/hooks/use-sessions';
 import { requestBrowserNotificationPermission } from '@/features/agent/browser-notifications';
-import { SessionActivityIndicator } from '@/features/workspace/components/session-activity-indicator';
+import { SessionSheetContent } from '../session-sheet-content';
 
 const SHEET_HEIGHT = 420;
 const TIMING_CONFIG = { duration: 280, easing: Easing.out(Easing.cubic) };
@@ -43,7 +42,7 @@ export function MobileSessionsSheet({ visible, onClose }: MobileSessionsSheetPro
   const [createPending, setCreatePending] = useState(false);
   const selectedWorkspaceId = useWorkspaceStore((s) => s.selectedWorkspaceId);
   const workspace = useWorkspaceStore((s) =>
-    s.workspaces.find((w) => w.id === s.selectedWorkspaceId)
+    s.workspaces.find((w) => w.id === s.selectedWorkspaceId),
   );
 
   const {
@@ -56,10 +55,6 @@ export function MobileSessionsSheet({ visible, onClose }: MobileSessionsSheetPro
     isRefetching,
   } = useSessions(selectedWorkspaceId);
 
-  const textPrimary = isDark ? '#fefdfd' : colors.text;
-  const textMuted = isDark ? '#cdc8c5' : colors.textTertiary;
-  const textSecondary = isDark ? '#f1ece8' : colors.textSecondary;
-  const btnBg = isDark ? '#191919' : '#F0F0F0';
   const selectedSessionId = pathname.match(/\/workspace\/[^/]+\/s\/([^/]+)/)?.[1] ?? null;
 
   useEffect(() => {
@@ -84,19 +79,18 @@ export function MobileSessionsSheet({ visible, onClose }: MobileSessionsSheetPro
     setCreatePending(true);
     requestBrowserNotificationPermission();
     try {
-      const info = await piClient.createAgentSession({
-        workspaceId: selectedWorkspaceId,
-      });
+      const info = await piClient.createAgentSession({ workspaceId: selectedWorkspaceId });
       router.navigate(`/workspace/${selectedWorkspaceId}/s/${info.session_id}`);
       dismiss();
-    } catch {} finally { setCreatePending(false); }
+    } catch {
+    } finally {
+      setCreatePending(false);
+    }
   }, [selectedWorkspaceId, createPending, piClient, router, dismiss]);
 
   const panGesture = Gesture.Pan()
     .onUpdate((e) => {
-      if (e.translationY > 0) {
-        translateY.value = e.translationY;
-      }
+      if (e.translationY > 0) translateY.value = e.translationY;
     })
     .onEnd((e) => {
       if (e.translationY > 100 || e.velocityY > 500) {
@@ -112,7 +106,7 @@ export function MobileSessionsSheet({ visible, onClose }: MobileSessionsSheetPro
 
   const overlayStyle = useAnimatedStyle(() => ({
     opacity: overlayOpacity.value,
-    pointerEvents: overlayOpacity.value > 0 ? 'auto' as const : 'none' as const,
+    pointerEvents: overlayOpacity.value > 0 ? ('auto' as const) : ('none' as const),
   }));
 
   return (
@@ -145,118 +139,29 @@ export function MobileSessionsSheet({ visible, onClose }: MobileSessionsSheetPro
           </View>
         </GestureDetector>
 
-          <View style={styles.header}>
-            <View style={styles.headerRow}>
-              <View style={styles.headerText}>
-                <Text style={[styles.title, { color: textPrimary }]}>
-                  Sessions
-                </Text>
-                {workspace && (
-                  <Text style={[styles.workspacePath, { color: textSecondary }]} numberOfLines={1}>
-                    {workspace.title.toLowerCase().replace(/\s+/g, '-')}
-                  </Text>
-                )}
-              </View>
-              <Pressable
-                onPress={() => refetch()}
-                disabled={isRefetching}
-                style={({ pressed }) => [
-                  styles.iconButton,
-                  pressed && { opacity: 0.7 },
-                ]}
-              >
-                {isRefetching ? (
-                  <ActivityIndicator size={13} color={textMuted} />
-                ) : (
-                  <RefreshCw size={13} color={textMuted} strokeWidth={1.8} />
-                )}
-              </Pressable>
-            </View>
-          </View>
-
-          <View style={styles.actions}>
-            <Pressable
-              onPress={handleNewSession}
-              disabled={createPending}
-              style={({ pressed }) => [
-                styles.newSessionButton,
-                { backgroundColor: btnBg },
-                pressed && { opacity: 0.8 },
-              ]}
-            >
-              {createPending ? (
-                <ActivityIndicator size={14} color={textPrimary} />
-              ) : (
-                <SquarePen size={14} color={textPrimary} strokeWidth={1.8} />
-              )}
-              <Text style={[styles.newSessionText, { color: textPrimary }]}>
-                New session
-              </Text>
-            </Pressable>
-          </View>
-
-          <ScrollView
-            style={styles.list}
-            contentContainerStyle={styles.listContent}
-            showsVerticalScrollIndicator={false}
-          >
-            {isLoading ? (
-              <ActivityIndicator style={{ marginTop: 24 }} />
-            ) : sessions.length === 0 ? (
-              <Text style={[styles.emptyText, { color: textMuted }]}>
-                No sessions yet
-              </Text>
-            ) : (
-              sessions.map((session) => (
-                <Pressable
-                  key={session.id}
-                  onPress={() => {
-                    if (selectedWorkspaceId) {
-                      router.navigate(`/workspace/${selectedWorkspaceId}/s/${session.id}`);
-                    }
-                    dismiss();
-                  }}
-                  style={({ pressed }) => [
-                    styles.sessionItem,
-                    session.id === selectedSessionId && {
-                      backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
-                    },
-                    pressed && { opacity: 0.7 },
-                  ]}
-                >
-                  <SessionActivityIndicator
-                    sessionId={session.id}
-                    color={textMuted}
-                  />
-                  <Text
-                    style={[styles.sessionTitle, { color: textPrimary }]}
-                    numberOfLines={1}
-                  >
-                    {session.display_name ?? session.id}
-                  </Text>
-                </Pressable>
-              ))
-            )}
-            {hasNextPage && (
-              <Pressable
-                onPress={() => fetchNextPage()}
-                disabled={isFetchingNextPage}
-                style={({ pressed }) => [
-                  styles.loadMoreButton,
-                  { backgroundColor: btnBg },
-                  pressed && { opacity: 0.8 },
-                ]}
-              >
-                {isFetchingNextPage ? (
-                  <ActivityIndicator size="small" />
-                ) : (
-                  <Text style={[styles.loadMoreText, { color: textMuted }]}>
-                    Load more
-                  </Text>
-                )}
-              </Pressable>
-            )}
-          </ScrollView>
+        <SessionSheetContent
+          title="Sessions"
+          subtitle={workspace?.title.toLowerCase().replace(/\s+/g, '-')}
+          sessions={sessions}
+          selectedSessionId={selectedSessionId}
+          isLoading={isLoading}
+          isRefetching={isRefetching}
+          hasNextPage={hasNextPage ?? false}
+          isFetchingNextPage={isFetchingNextPage}
+          createPending={createPending}
+          newButtonLabel="New session"
+          emptyLabel="No sessions yet"
+          isDark={isDark}
+          onNew={handleNewSession}
+          onSelect={(id) => {
+            if (selectedWorkspaceId) {
+              router.navigate(`/workspace/${selectedWorkspaceId}/s/${id}`);
+            }
+            dismiss();
+          }}
+          onRefresh={() => refetch()}
+          onLoadMore={() => fetchNextPage()}
+        />
       </Animated.View>
     </View>
   );
@@ -288,81 +193,5 @@ const styles = StyleSheet.create({
     width: 36,
     height: 4,
     borderRadius: 2,
-  },
-  header: {
-    paddingHorizontal: 20,
-    paddingBottom: 8,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  headerText: {
-    flex: 1,
-  },
-  iconButton: {
-    padding: 6,
-  },
-  title: {
-    fontSize: 15,
-    fontFamily: Fonts.sansSemiBold,
-  },
-  workspacePath: {
-    fontSize: 13,
-    fontFamily: Fonts.sans,
-    marginTop: 2,
-  },
-  actions: {
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-  },
-  newSessionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    height: 36,
-    borderRadius: 8,
-  },
-  newSessionText: {
-    fontSize: 14,
-    fontFamily: Fonts.sansMedium,
-  },
-  list: {
-    flex: 1,
-  },
-  listContent: {
-    paddingHorizontal: 12,
-    gap: 2,
-  },
-  sessionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-    borderRadius: 8,
-  },
-  sessionTitle: {
-    fontSize: 14,
-    fontFamily: Fonts.sans,
-    flex: 1,
-  },
-  emptyText: {
-    fontSize: 13,
-    fontFamily: Fonts.sans,
-    textAlign: 'center',
-    marginTop: 24,
-  },
-  loadMoreButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 36,
-    borderRadius: 8,
-    marginTop: 8,
-  },
-  loadMoreText: {
-    fontSize: 13,
-    fontFamily: Fonts.sansMedium,
   },
 });

@@ -105,9 +105,13 @@ export default function ChatSessionScreen() {
         {hasMessages && sessionId ? (
           <MessageList key={sessionId} sessionId={sessionId} />
         ) : session.isLoading || (!session.isReady && sessionId) ? (
-          <View style={styles.emptyCenter}>
-            <ActivityIndicator size="small" />
-          </View>
+          Platform.OS === 'ios' ? (
+            <View style={styles.emptyCenter}>
+              <ActivityIndicator size="small" />
+            </View>
+          ) : (
+            <ChatShimmer />
+          )
         ) : (
           <View style={styles.emptyCenter} />
         )}

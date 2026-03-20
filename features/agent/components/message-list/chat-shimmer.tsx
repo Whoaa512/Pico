@@ -3,7 +3,7 @@ import { Animated, StyleSheet, View } from "react-native";
 
 import { useColorScheme } from "@/hooks/use-color-scheme";
 
-function ShimmerBar({ width, delay = 0 }: { width: string | number; delay?: number }) {
+function ShimmerBar({ width, delay = 0 }: { width: `${number}%`; delay?: number }) {
   const colorScheme = useColorScheme() ?? "light";
   const isDark = colorScheme === "dark";
   const opacity = useRef(new Animated.Value(0.3)).current;
@@ -12,7 +12,7 @@ function ShimmerBar({ width, delay = 0 }: { width: string | number; delay?: numb
     const animation = Animated.loop(
       Animated.sequence([
         Animated.timing(opacity, {
-          toValue: 1,
+          toValue: 0.7,
           duration: 800,
           delay,
           useNativeDriver: true,
@@ -33,8 +33,8 @@ function ShimmerBar({ width, delay = 0 }: { width: string | number; delay?: numb
       style={[
         styles.bar,
         {
-          width: width as any,
-          backgroundColor: isDark ? "#252525" : "#EEEEEE",
+          width,
+          backgroundColor: isDark ? "#252525" : "#E5E5E5",
           opacity,
         },
       ]}
@@ -42,15 +42,31 @@ function ShimmerBar({ width, delay = 0 }: { width: string | number; delay?: numb
   );
 }
 
-function ShimmerBlock({ align }: { align: "left" | "right" }) {
-  const isRight = align === "right";
+function UserShimmer() {
+  const colorScheme = useColorScheme() ?? "light";
+  const isDark = colorScheme === "dark";
 
   return (
-    <View style={[styles.block, isRight && styles.blockRight]}>
-      <View style={[styles.bubble, isRight ? styles.bubbleRight : styles.bubbleLeft]}>
-        <ShimmerBar width="80%" delay={isRight ? 0 : 100} />
-        {!isRight && <ShimmerBar width="60%" delay={200} />}
-        {!isRight && <ShimmerBar width="90%" delay={300} />}
+    <View style={styles.userRow}>
+      <View
+        style={[
+          styles.userBubble,
+          { backgroundColor: isDark ? "#2A2A2A" : "#F0F0F0" },
+        ]}
+      >
+        <ShimmerBar width="100%" delay={0} />
+      </View>
+    </View>
+  );
+}
+
+function AssistantShimmer({ lines }: { lines: `${number}%`[] }) {
+  return (
+    <View style={styles.assistantRow}>
+      <View style={styles.assistantBody}>
+        {lines.map((w, i) => (
+          <ShimmerBar key={i} width={w} delay={i * 80} />
+        ))}
       </View>
     </View>
   );
@@ -59,10 +75,10 @@ function ShimmerBlock({ align }: { align: "left" | "right" }) {
 export function ChatShimmer() {
   return (
     <View style={styles.container}>
-      <ShimmerBlock align="right" />
-      <ShimmerBlock align="left" />
-      <ShimmerBlock align="right" />
-      <ShimmerBlock align="left" />
+      <UserShimmer />
+      <AssistantShimmer lines={["92%", "100%", "78%", "55%"]} />
+      <UserShimmer />
+      <AssistantShimmer lines={["88%", "95%", "60%"]} />
     </View>
   );
 }
@@ -70,35 +86,36 @@ export function ChatShimmer() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingHorizontal: 16,
-    paddingTop: 24,
-    gap: 20,
+    justifyContent: "flex-end",
+    paddingBottom: 12,
+    gap: 6,
     maxWidth: 1080,
     alignSelf: "center",
     width: "100%",
   },
-  block: {
+  userRow: {
     flexDirection: "row",
-  },
-  blockRight: {
     justifyContent: "flex-end",
+    paddingHorizontal: 16,
+    paddingVertical: 6,
   },
-  bubble: {
-    gap: 8,
-    paddingVertical: 12,
+  userBubble: {
+    width: "40%",
     paddingHorizontal: 14,
-    borderRadius: 12,
-    maxWidth: "70%",
+    paddingVertical: 14,
+    borderRadius: 16,
+    borderTopRightRadius: 4,
   },
-  bubbleLeft: {
-    alignSelf: "flex-start",
+  assistantRow: {
+    paddingTop: 8,
+    paddingBottom: 4,
+    paddingHorizontal: 16,
   },
-  bubbleRight: {
-    alignSelf: "flex-end",
-    maxWidth: "50%",
+  assistantBody: {
+    gap: 10,
   },
   bar: {
-    height: 12,
-    borderRadius: 6,
+    height: 14,
+    borderRadius: 7,
   },
 });
