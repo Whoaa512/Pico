@@ -68,8 +68,19 @@ function getTurnSummaryForRange(
   if (previousUserIdx < 0) return null;
 
   const startTs = messages[previousUserIdx]?.timestamp;
-  const endTs = messages[currentUserIdx]?.timestamp;
-  if (startTs == null || endTs == null) return null;
+  if (startTs == null) return null;
+
+  // Find the last assistant/system message before the next user message
+  // to avoid including idle time between the agent finishing and the user
+  // sending the next message.
+  let endTs: number | undefined;
+  for (let i = currentUserIdx - 1; i > previousUserIdx; i--) {
+    if (messages[i].role !== "user") {
+      endTs = messages[i].timestamp;
+      break;
+    }
+  }
+  if (endTs == null) return null;
 
   const duration = endTs - startTs;
   if (duration <= 0) return null;

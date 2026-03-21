@@ -146,6 +146,25 @@ fn strip_live_event(mut event: Value) -> Value {
         }
     }
 
+    // Strip partialResult from tool_execution_update for "read" tool calls.
+    // The frontend doesn't render partial read results (they contain the full
+    // file on every delta, causing expensive re-renders), so avoid sending
+    // the large payload over the wire entirely.
+    if event_type == "tool_execution_update" {
+        let is_read = event
+            .get("data")
+            .and_then(|d| d.get("toolName"))
+            .and_then(|n| n.as_str())
+            .map_or(false, |n| n == "Read" || n == "read");
+        if is_read {
+            if let Some(data) = event.get_mut("data") {
+                if let Some(obj) = data.as_object_mut() {
+                    obj.remove("partialResult");
+                }
+            }
+        }
+    }
+
     event
 }
 

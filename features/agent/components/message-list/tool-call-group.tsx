@@ -663,18 +663,16 @@ function ReadToolCall({ tc }: { tc: ToolCallInfo }) {
   const isDark = colorScheme === "dark";
   const isRunning = isToolCallActive(tc);
   const statusLabel = getToolStatusLabel(tc);
-  const [expanded, setExpanded] = useState(isRunning);
-
-  useEffect(() => {
-    if (isRunning) {
-      setExpanded(true);
-    }
-  }, [isRunning]);
+  // Stay collapsed while streaming to avoid expensive re-renders on every
+  // partial-result delta (the server sends the full file content each time).
+  const [expanded, setExpanded] = useState(false);
 
   const parsed = parseToolArguments(tc.arguments);
   const path = parsed.path ?? "";
   const fileName = basename(path);
-  const output = tc.result ?? tc.partialResult ?? "";
+  // Only use the final result – partialResult for reads contains the full file
+  // on every delta which triggers costly re-parses and re-renders.
+  const output = tc.result ?? "";
   const parsedOutput = useMemo(() => parseReadOutput(output), [output]);
   const startLine = (parsed.offset ?? 0) + 1;
   const rows = useMemo(
