@@ -12,10 +12,16 @@ A mobile companion app for [pi-coding-agent](https://github.com/mariozechner/pi-
 curl -fsSL https://raw.githubusercontent.com/anthaathi/pi-companion/main/install.sh | bash
 ```
 
-This automatically detects your OS and architecture, downloads the latest release, and installs `pi-server` to `~/.pi-server/bin`. Add it to your PATH by following the instructions printed after install, or run it directly:
+This automatically detects your OS and architecture, downloads the latest release, and installs `pi-server` to `~/.pi/ui`. The installer will:
+
+1. Download the correct binary for your platform
+2. Run `pi-server init` to set up your credentials
+3. Ask if you'd like to install it as a background service (systemd on Linux, launchd on macOS)
+
+You can also run it directly:
 
 ```bash
-~/.pi-server/bin/pi-server
+~/.pi/ui/pi-server
 ```
 
 **Manual download:**
