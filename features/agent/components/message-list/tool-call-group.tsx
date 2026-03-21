@@ -176,7 +176,7 @@ function formatSingleCall(tc: ToolCallInfo): {
 }
 
 const MULTI_GROUP_PARTS: Record<string, { before: string; after: string }> = {
-  read: { before: "Read ", after: " files" },
+  read: { before: "Explored ", after: " files" },
   edit: { before: "Edited ", after: " files" },
   write: { before: "Wrote ", after: " files" },
   bash: { before: "Ran ", after: " commands" },
@@ -1697,9 +1697,11 @@ function ToolCallGroupComponent({
     return <SingleToolCall tc={calls[0]} />;
   }
 
+  const collapsedOnly = toolName === "read";
+
   return (
     <View>
-      <Pressable style={styles.row} onPress={toggle}>
+      <Pressable style={styles.row} onPress={collapsedOnly ? undefined : toggle} disabled={collapsedOnly}>
         <View style={styles.animatedLabelRow}>
           {groupParts.before ? (
             <Text style={[styles.label, { color: textColor }]}>{groupParts.before}</Text>
@@ -1720,7 +1722,7 @@ function ToolCallGroupComponent({
         </View>
       </Pressable>
 
-      {expanded && (
+      {!collapsedOnly && expanded && (
         <View style={styles.expandedList}>
           {calls.map((tc) => (
             <ToolCallCard key={tc.id} toolCall={tc} />
