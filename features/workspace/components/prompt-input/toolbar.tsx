@@ -12,7 +12,7 @@ import {
   TextInputKeyPressEventData,
   View,
 } from 'react-native';
-import { ChevronDown, Check } from 'lucide-react-native';
+import { ChevronDown, Check, RotateCw } from 'lucide-react-native';
 
 import { Fonts } from '@/constants/theme';
 import { THINKING_LEVELS, FlatModel, ThinkingLevel } from './constants';
@@ -65,6 +65,8 @@ function ToolbarComponent({
   const config = useAgentConfig(ready ? (sessionId ?? null) : null);
   const models = config.models;
   const agentState = config.state;
+  const configError = config.error;
+  const configRetry = config.retry;
   const modelsLoading = config.isLoading;
   const stateLoading = config.isLoading;
   const hasCachedModels = models !== undefined;
@@ -232,6 +234,33 @@ function ToolbarComponent({
     },
     [flatModels, popoverIndex, handleSelectModel, inputRef]
   );
+
+  if (configError && !agentState) {
+    return (
+      <View style={styles.wrap}>
+        <View
+          style={[
+            styles.toolbar,
+            styles.toolbarError,
+            { backgroundColor: theme.toolbarBg, borderColor: theme.toolbarBorder },
+          ]}
+        >
+          <Text style={[styles.errorText, { color: theme.textMuted }]} numberOfLines={1}>
+            Failed to load
+          </Text>
+          <Pressable
+            onPress={configRetry}
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading toolbar"
+            style={({ pressed }) => [styles.retryButton, pressed && { opacity: 0.7 }]}
+          >
+            <RotateCw size={12} color={theme.accentColor} strokeWidth={2} />
+            <Text style={[styles.retryText, { color: theme.accentColor }]}>Retry</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
 
   if ((!ready && !showCachedToolbar) || (modelsLoading && !hasCachedModels) || (stateLoading && !hasCachedState) || !agentState) {
     return <>{skeleton}</>;
@@ -555,6 +584,26 @@ const styles = StyleSheet.create({
     gap: 2,
     marginTop: TOOLBAR_ANDROID_MARGIN_TOP,
     zIndex: Platform.OS === 'android' ? 1 : 5,
+  },
+  toolbarError: {
+    justifyContent: 'center',
+    gap: 8,
+  },
+  errorText: {
+    fontSize: 12,
+    fontFamily: Fonts.sans,
+  },
+  retryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    height: TOOLBAR_CONTROL_HEIGHT,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+  },
+  retryText: {
+    fontSize: 12,
+    fontFamily: Fonts.sansMedium,
   },
   spacer: {
     flex: 1,
