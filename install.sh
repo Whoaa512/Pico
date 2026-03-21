@@ -45,7 +45,7 @@ has_tty() { [ -t 0 ] || [ -t 2 ]; }
 tty_fd() {
   if [ -t 0 ]; then
     echo "/dev/stdin"
-  elif [ -e /dev/tty ]; then
+  elif [ -r /dev/tty ] && (echo < /dev/tty) 2>/dev/null; then
     echo "/dev/tty"
   else
     echo ""
@@ -539,10 +539,16 @@ do_install() {
 
   # First-time setup
   if [ ! -f "${INSTALL_DIR}/config.toml" ]; then
-    info "Setting up pi-server for the first time..."
-    echo ""
-    (cd "$INSTALL_DIR" && "./${BINARY}" init < "$(tty_fd)")
-    echo ""
+    local tty
+    tty="$(tty_fd)"
+    if [ -n "$tty" ]; then
+      info "Setting up pi-server for the first time..."
+      echo ""
+      (cd "$INSTALL_DIR" && "./${BINARY}" init < "$tty")
+      echo ""
+    else
+      info "Run 'cd ${INSTALL_DIR} && ./${BINARY} init' to set up credentials."
+    fi
   fi
 
   # Service setup
