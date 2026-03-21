@@ -49,3 +49,4 @@ unsloth_compiled_cache/
 # generated native folders
 /ios
 /android
+.eas-token
