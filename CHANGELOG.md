@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0](https://github.com/anthaathi/pi-companion/compare/v1.3.1...v1.4.0) (2026-03-21)
+
+
+### Features
+
+* add 'Open in GitHub/GitLab' button in mobile header for git repos ([24ecbc2](https://github.com/anthaathi/pi-companion/commit/24ecbc2f0604b6d7bac87ac9146b90fe9b45330f))
+
 ## [1.3.1](https://github.com/anthaathi/pi-companion/compare/v1.3.0...v1.3.1) (2026-03-21)
 
 
