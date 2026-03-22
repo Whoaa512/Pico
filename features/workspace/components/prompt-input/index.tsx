@@ -13,6 +13,7 @@ import {
   View,
 } from "react-native";
 import { Plus, ArrowUp, Mic, Square } from "lucide-react-native";
+import Svg, { Circle as SvgCircle } from "react-native-svg";
 import * as DocumentPicker from "expo-document-picker";
 import { useQuery } from "@tanstack/react-query";
 
@@ -174,6 +175,83 @@ const skeletonStyles = StyleSheet.create({
   },
 });
 
+function formatTokenCount(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(n >= 10_000 ? 0 : 1)}K`;
+  return String(n);
+}
+
+function ContextUsageRing({
+  used,
+  total,
+  isDark,
+}: {
+  used: number;
+  total: number;
+  isDark: boolean;
+}) {
+  const ratio = Math.min(used / total, 1);
+  const size = 28;
+  const stroke = 2.5;
+  const radius = (size - stroke) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const filled = circumference * ratio;
+  const trackColor = isDark ? "#333" : "#E0E0E0";
+  const fillColor =
+    ratio > 0.9
+      ? "#EF4444"
+      : ratio > 0.7
+        ? "#F59E0B"
+        : isDark
+          ? "#66BB6A"
+          : "#43A047";
+  const textColor = isDark ? "#999" : "#888";
+  const label = formatTokenCount(used);
+
+  return (
+    <View style={contextStyles.wrap}>
+      <Svg width={size} height={size}>
+        <SvgCircle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke={trackColor}
+          strokeWidth={stroke}
+          fill="none"
+        />
+        {ratio > 0 && (
+          <SvgCircle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            stroke={fillColor}
+            strokeWidth={stroke}
+            fill="none"
+            strokeDasharray={`${filled} ${circumference - filled}`}
+            strokeDashoffset={circumference * 0.25}
+            strokeLinecap="round"
+          />
+        )}
+      </Svg>
+      <Text style={[contextStyles.label, { color: textColor }]}>{label}</Text>
+    </View>
+  );
+}
+
+const contextStyles = StyleSheet.create({
+  wrap: {
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 8,
+    gap: 1,
+  },
+  label: {
+    fontSize: 8,
+    fontFamily: Fonts.sans,
+    textAlign: "center",
+  },
+});
+
 type PromptKeyPressEventData = TextInputKeyPressEventData & {
   shiftKey?: boolean;
   isComposing?: boolean;
@@ -224,8 +302,24 @@ export function PromptInput({
     allowTypingWhileDisabled && isStartingSession;
   const inputDisabled = !!disabled && !canComposeWhileDisabled;
   const sendDisabled = !!disabled;
-  const { mode: streamedMode } = useAgentSession(sessionId ?? null);
+  const agentSession = useAgentSession(sessionId ?? null);
+  const streamedMode = agentSession.mode;
   const agentConfig = useAgentConfig(sessionReady ? (sessionId ?? null) : null);
+
+  // Context usage: find last assistant message with usage info
+  const contextUsage = useMemo(() => {
+    const contextWindow = agentConfig.state?.model?.contextWindow;
+    if (!contextWindow) return null;
+    const msgs = agentSession.messages as { role: string; usage?: { input?: number; output?: number } }[];
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      const msg = msgs[i];
+      if (msg.role === "assistant" && msg.usage?.input) {
+        const used = (msg.usage.input ?? 0) + (msg.usage.output ?? 0);
+        return { used, total: contextWindow };
+      }
+    }
+    return null;
+  }, [agentSession.messages, agentConfig.state?.model?.contextWindow]);
 
   const { data: backendCommands } = useQuery({
     queryKey: ["slash-commands", sessionId],
@@ -836,6 +930,13 @@ export function PromptInput({
             </Pressable>
           )}
           <View style={{ flex: 1 }} />
+          {contextUsage ? (
+            <ContextUsageRing
+              used={contextUsage.used}
+              total={contextUsage.total}
+              isDark={theme.isDark}
+            />
+          ) : null}
           {showQueueActions ? (
             <View style={styles.queueActionGroup}>
               {(["steer", "followUp"] as QueueBehavior[]).map((behavior) => (
