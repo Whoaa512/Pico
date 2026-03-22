@@ -84,7 +84,7 @@ export function EditToolCall({ tc }: { tc: ToolCallInfo }) {
   return (
     <View>
       <Pressable style={styles.row} onPress={() => {
-        if (!isWideScreen && hasData) {
+        if (!isWideScreen) {
           setSheetOpen(true);
         } else {
           animateLayout();
