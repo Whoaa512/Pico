@@ -347,19 +347,25 @@ export function PromptInput({
   const agentConfig = useAgentConfig(sessionReady ? (sessionId ?? null) : null);
 
   // Context usage: find last assistant message with usage info
-  // Context usage: input + output tokens against the context window
-  // cacheRead/cacheWrite are subsets of input, not additional tokens
+  // Context usage from last assistant message.
+  // Per the RPC docs, usage fields are additive:
+  //   input     = non-cached input tokens
+  //   cacheRead = tokens served from prompt cache
+  //   cacheWrite = tokens newly written to prompt cache
+  //   output    = generated output tokens
+  // Total context window consumed = input + cacheRead + cacheWrite + output
   const contextUsage = useMemo(() => {
     const contextWindow = agentConfig.state?.model?.contextWindow;
     if (!contextWindow) return null;
     const msgs = agentSession.messages as {
       role: string;
-      usage?: { input?: number; output?: number };
+      usage?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number };
     }[];
     for (let i = msgs.length - 1; i >= 0; i--) {
       const msg = msgs[i];
       if (msg.role === "assistant" && msg.usage) {
-        const used = (msg.usage.input ?? 0) + (msg.usage.output ?? 0);
+        const u = msg.usage;
+        const used = (u.input ?? 0) + (u.output ?? 0) + (u.cacheRead ?? 0) + (u.cacheWrite ?? 0);
         if (used <= 0) continue;
         return { used, total: contextWindow };
       }
