@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { Animated, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Animated, Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { X, Columns2, Rows2 } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -43,6 +43,8 @@ export function DiffBottomSheet({
   const colorScheme = useColorScheme() ?? "light";
   const isDark = colorScheme === "dark";
   const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
+  const sheetHeight = Math.max(320, Math.floor(windowHeight * 0.92));
   const diffViewMode = useAppSettingsStore((s) => s.diffViewMode);
   const updateSettings = useAppSettingsStore((s) => s.update);
   const viewMode = diffViewMode;
@@ -98,6 +100,7 @@ export function DiffBottomSheet({
             styles.sheet,
             {
               backgroundColor: bg,
+              height: sheetHeight,
               paddingBottom: insets.bottom,
               transform: [{ translateY: slideAnim }],
             },
@@ -212,7 +215,6 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.4)",
   },
   sheet: {
-    maxHeight: "92%",
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
     overflow: "hidden",
