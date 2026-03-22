@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Animated, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Animated, LayoutAnimation, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { ChevronDown, ChevronRight, Columns2, Rows2 } from "lucide-react-native";
 import { useIsMessageVisible } from "./visibility-context";
@@ -29,6 +29,18 @@ const SINGLE_VERB: Record<string, string> = {
 };
 
 const MAX_VISIBLE_GROUP_ITEMS = 5;
+
+const EXPAND_ANIM = LayoutAnimation.create(
+  200,
+  LayoutAnimation.Types.easeInEaseOut,
+  LayoutAnimation.Properties.opacity,
+);
+
+function animateLayout() {
+  if (Platform.OS !== "web") {
+    LayoutAnimation.configureNext(EXPAND_ANIM);
+  }
+}
 
 function areToolCallArraysEqual(left: ToolCallInfo[], right: ToolCallInfo[]): boolean {
   if (left === right) return true;
@@ -162,7 +174,7 @@ function BashToolCall({ tc }: { tc: ToolCallInfo }) {
   const mutedColor = isDark ? "#888" : "#888";
   const shortCmd = command.length > 60 ? command.slice(0, 60) + "…" : command;
 
-  const toggle = useCallback(() => setExpanded((v) => !v), []);
+  const toggle = useCallback(() => { animateLayout(); setExpanded((v) => !v); }, []);
 
   return (
     <View>
@@ -649,7 +661,7 @@ function ReadToolCall({ tc }: { tc: ToolCallInfo }) {
 
   return (
     <View>
-      <Pressable style={styles.row} onPress={() => setExpanded((v) => !v)}>
+      <Pressable style={styles.row} onPress={() => { animateLayout(); setExpanded((v) => !v); }}>
         <Text style={styles.singleLine} numberOfLines={1}>
           <Text style={[styles.verb, { color: textColor }]}>Read</Text>
           <Text style={[styles.detail, { color: mutedColor }]}> {fileName}</Text>
@@ -828,7 +840,7 @@ function WriteToolCall({ tc }: { tc: ToolCallInfo }) {
 
   return (
     <View>
-      <Pressable style={styles.row} onPress={() => setExpanded((v) => !v)}>
+      <Pressable style={styles.row} onPress={() => { animateLayout(); setExpanded((v) => !v); }}>
         <Text style={styles.singleLine} numberOfLines={1}>
           <Text style={[styles.verb, { color: textColor }]}>Write</Text>
           <Text style={[styles.detail, { color: mutedColor }]}> {fileName}</Text>
@@ -1035,7 +1047,7 @@ function EditToolCall({ tc }: { tc: ToolCallInfo }) {
 
   return (
     <View>
-      <Pressable style={styles.row} onPress={() => setExpanded((v) => !v)}>
+      <Pressable style={styles.row} onPress={() => { animateLayout(); setExpanded((v) => !v); }}>
         <Text style={styles.singleLine} numberOfLines={1}>
           <Text style={[styles.verb, { color: textColor }]}>Edit</Text>
           <Text style={[styles.detail, { color: mutedColor }]}> {fileName}</Text>
@@ -1355,7 +1367,7 @@ function SubagentToolCall({ tc }: { tc: ToolCallInfo }) {
   const boxBg = isDark ? "#0D0D0D" : "#FAFAFA";
   const stepBg = isDark ? "#141414" : "#F5F5F5";
 
-  const toggle = useCallback(() => setExpanded((v) => !v), []);
+  const toggle = useCallback(() => { animateLayout(); setExpanded((v) => !v); }, []);
 
   const steps = useMemo(
     () => (output && isComplete ? parseSubagentSteps(output) : []),
@@ -1579,7 +1591,7 @@ function SingleToolCall({ tc }: { tc: ToolCallInfo }) {
     <View>
       <Pressable
         style={styles.row}
-        onPress={() => output && setExpanded((v) => !v)}
+        onPress={() => { if (output) { animateLayout(); setExpanded((v) => !v); } }}
       >
         <Text style={styles.singleLine} numberOfLines={1}>
           <Text style={[styles.verb, { color: textColor }]}>{verb}</Text>
@@ -1645,7 +1657,7 @@ function ToolCallGroupComponent({
     }
   }, [groupStatusLabel]);
 
-  const toggle = useCallback(() => setExpanded((v) => !v), []);
+  const toggle = useCallback(() => { animateLayout(); setExpanded((v) => !v); }, []);
   const groupParts = multiGroupLabelParts(toolName, calls.length);
 
   const [showAll, setShowAll] = useState(false);
@@ -1692,7 +1704,7 @@ function ToolCallGroupComponent({
           {hasMore && !showAll && (
             <Pressable
               style={styles.showMoreBtn}
-              onPress={() => setShowAll(true)}
+              onPress={() => { animateLayout(); setShowAll(true); }}
             >
               <Text style={[styles.showMoreText, { color: mutedColor }]}>
                 Show {hiddenCount} more…

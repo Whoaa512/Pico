@@ -12,6 +12,9 @@ import {
 } from "react-native";
 import { ArrowDown, CheckCircle2 } from "lucide-react-native";
 import Animated, {
+  FadeIn,
+  FadeInDown,
+  FadeInUp,
   SlideInUp,
   SlideOutUp,
   useAnimatedStyle,
@@ -289,6 +292,10 @@ const ModelDivider = memo(function ModelDivider({
   );
 });
 
+const USER_ENTER = FadeInDown.duration(250).damping(18);
+const ASSISTANT_ENTER = FadeIn.duration(300);
+const SYSTEM_ENTER = FadeIn.duration(200);
+
 const MessageRow = memo(
   function MessageRow({
     item,
@@ -300,7 +307,7 @@ const MessageRow = memo(
     const { message, toolCalls, showTurnDivider, turnSummary, modelLabel, animateOnMount } =
       item;
 
-    return (
+    const content = (
       <View>
         {showTurnDivider ? (
           <TurnDivider label={turnSummary} isDark={isDark} />
@@ -320,6 +327,21 @@ const MessageRow = memo(
           <SystemMessage message={message} />
         )}
       </View>
+    );
+
+    if (!animateOnMount) return content;
+
+    const entering =
+      message.role === "user"
+        ? USER_ENTER
+        : message.role === "assistant"
+          ? ASSISTANT_ENTER
+          : SYSTEM_ENTER;
+
+    return (
+      <Animated.View entering={entering}>
+        {content}
+      </Animated.View>
     );
   },
   (prev, next) =>
