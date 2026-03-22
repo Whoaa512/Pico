@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { Redirect, Slot, usePathname } from 'expo-router';
 
@@ -28,13 +28,24 @@ export default function AppLayout() {
 
   const [status, setStatus] = useState<'loading' | 'ready' | 'no-server'>('loading');
   const isServerRoute = pathname === '/servers';
+  const refreshActiveServerSession = useAuthStore((s) => s.refreshActiveServerSession);
+
+  const onAuthError = useCallback(() => {
+    // Token expired on the SSE stream — try to refresh silently
+    refreshActiveServerSession().then((ok) => {
+      if (!ok) {
+        setStatus('no-server');
+      }
+    });
+  }, [refreshActiveServerSession]);
 
   const piClientConfig = useMemo<PiClientConfig>(
     () => ({
       serverUrl: serverAddress,
       accessToken,
+      onAuthError,
     }),
-    [serverAddress, accessToken],
+    [serverAddress, accessToken, onAuthError],
   );
 
   useEffect(() => {
