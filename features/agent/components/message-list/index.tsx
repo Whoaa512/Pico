@@ -764,6 +764,7 @@ export function MessageList({ sessionId }: { sessionId: string }) {
         windowSize={7}
         ListHeaderComponent={footer}
         showsVerticalScrollIndicator={false}
+        removeClippedSubviews={Platform.OS !== "web"}
       />
 
       {bannerInfo ? (
