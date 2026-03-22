@@ -41,7 +41,7 @@ export interface ParsedReadOutput {
 // Diff algorithm
 // ---------------------------------------------------------------------------
 
-const LCS_MAX_LINES = 500;
+const LCS_MAX_LINES = 100;
 
 export function lcsLineDiff(oldText: string, newText: string): DiffOp[] {
   const a = oldText.split("\n");
