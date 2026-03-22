@@ -185,8 +185,8 @@ function ContextUsageRing({
   isDark: boolean;
 }) {
   const ratio = Math.min(used / total, 1);
-  const size = 18;
-  const stroke = 1.5;
+  const size = 20;
+  const stroke = 3;
   const radius = (size - stroke) / 2;
   const circumference = 2 * Math.PI * radius;
   const filled = circumference * ratio;
@@ -225,7 +225,10 @@ function ContextUsageRing({
 const contextStyles = StyleSheet.create({
   wrap: {
     justifyContent: "center",
+    alignSelf: "center",
     marginRight: 6,
+    height: 36,
+    alignItems: "center",
   },
 });
 
