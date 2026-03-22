@@ -41,11 +41,30 @@ export interface ParsedReadOutput {
 // Diff algorithm
 // ---------------------------------------------------------------------------
 
+const LCS_MAX_LINES = 500;
+
 export function lcsLineDiff(oldText: string, newText: string): DiffOp[] {
   const a = oldText.split("\n");
   const b = newText.split("\n");
   const n = a.length;
   const m = b.length;
+
+  // For very large inputs, diff only the last N lines to avoid O(n*m) cost.
+  // The tail is most relevant since edits happen at the end of context.
+  if (n > LCS_MAX_LINES || m > LCS_MAX_LINES) {
+    const aSlice = a.slice(-LCS_MAX_LINES);
+    const bSlice = b.slice(-LCS_MAX_LINES);
+    const skippedA = n - aSlice.length;
+    const skippedB = m - bSlice.length;
+    const tailOps = lcsLineDiff(aSlice.join("\n"), bSlice.join("\n"));
+    const result: DiffOp[] = [];
+    if (skippedA > 0 || skippedB > 0) {
+      const skipped = Math.max(skippedA, skippedB);
+      result.push({ type: "equal", lines: [`… ${skipped} lines not shown`] });
+    }
+    result.push(...tailOps);
+    return result;
+  }
 
   const dp: number[][] = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
   for (let i = n - 1; i >= 0; i--) {
@@ -178,17 +197,19 @@ const KEYWORDS = new Set([
   "not", "struct", "impl", "fn", "pub", "mut", "use", "mod", "crate",
 ]);
 
+const DARK_COLORS = {
+  keyword: "#C586C0", string: "#CE9178", number: "#B5CEA8",
+  comment: "#6A9955", type: "#4EC9B0", func: "#DCDCAA",
+  punct: "#808080", plain: "#9CDCFE",
+};
+const LIGHT_COLORS = {
+  keyword: "#AF00DB", string: "#A31515", number: "#098658",
+  comment: "#008000", type: "#267F99", func: "#795E26",
+  punct: "#999999", plain: "#333333",
+};
+
 function tokenizeLine(line: string, isDark: boolean): Token[] {
-  const c = {
-    keyword: isDark ? "#C586C0" : "#AF00DB",
-    string: isDark ? "#CE9178" : "#A31515",
-    number: isDark ? "#B5CEA8" : "#098658",
-    comment: isDark ? "#6A9955" : "#008000",
-    type: isDark ? "#4EC9B0" : "#267F99",
-    func: isDark ? "#DCDCAA" : "#795E26",
-    punct: isDark ? "#808080" : "#999999",
-    plain: isDark ? "#9CDCFE" : "#333333",
-  };
+  const c = isDark ? DARK_COLORS : LIGHT_COLORS;
 
   const tokens: Token[] = [];
   const re = /\/\/.*|\/\*[\s\S]*?\*\/|#.*|"""[\s\S]*?"""|'''[\s\S]*?'''|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`|\b\d+\.?\d*(?:e[+-]?\d+)?\b|\b0x[0-9a-fA-F]+\b|[A-Z][a-zA-Z0-9_]*|[a-zA-Z_]\w*(?=\s*\()|[a-zA-Z_]\w*|[{}()\[\];:,.<>!=+\-*/%&|^~?@]|[ \t]+|\S/g;
@@ -224,6 +245,10 @@ function tokenizeLine(line: string, isDark: boolean): Token[] {
 
 export function TokenizedText({ line, isDark, style }: { line: string; isDark: boolean; style?: any }) {
   const tokens = useMemo(() => tokenizeLine(line, isDark), [line, isDark]);
+  // Fast path: single token = no nesting needed
+  if (tokens.length === 1) {
+    return <Text style={[style, { color: tokens[0].color }]} selectable>{tokens[0].text}</Text>;
+  }
   return (
     <Text style={style} selectable>
       {tokens.map((tok, i) => (
@@ -232,6 +257,20 @@ export function TokenizedText({ line, isDark, style }: { line: string; isDark: b
     </Text>
   );
 }
+
+/**
+ * Simple diff: just show oldText as removed block and newText as added block.
+ * Much cheaper than LCS for the edit tool's search/replace pattern.
+ */
+export function simpleDiff(oldText: string, newText: string): DiffOp[] {
+  const ops: DiffOp[] = [];
+  if (oldText) ops.push({ type: "delete", lines: oldText.split("\n") });
+  if (newText) ops.push({ type: "insert", lines: newText.split("\n") });
+  return ops;
+}
+
+/** Max lines to render before showing "Show all" */
+export const MAX_DIFF_LINES = 80;
 
 // ---------------------------------------------------------------------------
 // Read output parsing

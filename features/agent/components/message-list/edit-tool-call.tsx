@@ -14,7 +14,7 @@ import {
   buildInline,
   buildSideBySide,
   editStyles,
-  lcsLineDiff,
+  simpleDiff,
 } from "./code-preview";
 
 export function EditToolCall({ tc }: { tc: ToolCallInfo }) {
@@ -47,9 +47,11 @@ export function EditToolCall({ tc }: { tc: ToolCallInfo }) {
   const addColor = isDark ? "#3FB950" : "#1A7F37";
   const removeColor = isDark ? "#F85149" : "#CF222E";
 
+  // Edit tool uses search/replace — no need for expensive LCS diff.
+  // Just show old as removed, new as added.
   const ops = useMemo(() => {
     if (!expanded || (!oldText && !newText)) return [];
-    return lcsLineDiff(oldText, newText);
+    return simpleDiff(oldText, newText);
   }, [expanded, oldText, newText]);
 
   const sideBySideRows = useMemo(() => {
