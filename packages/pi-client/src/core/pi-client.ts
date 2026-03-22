@@ -28,6 +28,9 @@ export class PiClient {
   constructor(config: PiClientConfig) {
     this._config = config;
     this.api = new ApiClient(config.serverUrl, config.accessToken);
+    if (config.onApiAuthError) {
+      this.api.setAuthErrorHandler(config.onApiAuthError);
+    }
     this._stream = new StreamConnection({
       serverUrl: config.serverUrl,
       getAccessToken: () => this._config.accessToken,

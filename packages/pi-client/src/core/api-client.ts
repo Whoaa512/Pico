@@ -36,6 +36,7 @@ function unwrapResult<T>(result: { data?: unknown; error?: unknown }): T {
 export class ApiClient {
   private _serverUrl: string;
   private _accessToken: string;
+  private _onAuthError?: () => Promise<boolean>;
 
   constructor(serverUrl: string, accessToken: string) {
     this._serverUrl = serverUrl;
@@ -44,6 +45,39 @@ export class ApiClient {
     defaultClient.interceptors.request.use((request) => {
       request.headers.set("Authorization", `Bearer ${this._accessToken}`);
       return request;
+    });
+
+    // Retry once on 401 after refreshing the token
+    defaultClient.interceptors.response.use(async (response, request, opts) => {
+      if (
+        response.status !== 401 ||
+        (opts as { _authRetry?: boolean })._authRetry ||
+        !this._onAuthError
+      ) {
+        return response;
+      }
+
+      // Skip retry for auth endpoints
+      const path = opts.url ?? "";
+      if (path.includes("/auth/")) return response;
+
+      const refreshed = await this._onAuthError();
+      if (!refreshed) return response;
+
+      // Retry with the fresh token
+      const retryHeaders = new Headers(request.headers);
+      retryHeaders.set("Authorization", `Bearer ${this._accessToken}`);
+
+      try {
+        return await fetch(request.url, {
+          method: request.method,
+          headers: retryHeaders,
+          body: request.method !== "GET" && request.method !== "HEAD" ? request.body : undefined,
+          signal: request.signal,
+        });
+      } catch {
+        return response;
+      }
     });
   }
 
@@ -57,6 +91,15 @@ export class ApiClient {
 
   updateToken(accessToken: string): void {
     this._accessToken = accessToken;
+  }
+
+  /**
+   * Set a callback that is invoked when a 401 response is received.
+   * The callback should attempt to refresh the token and return true
+   * if successful (the request will be retried with the new token).
+   */
+  setAuthErrorHandler(handler: () => Promise<boolean>): void {
+    this._onAuthError = handler;
   }
 
   // ---------------------------------------------------------------------------

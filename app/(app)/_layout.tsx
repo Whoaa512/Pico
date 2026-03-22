@@ -39,13 +39,19 @@ export default function AppLayout() {
     });
   }, [refreshActiveServerSession]);
 
+  const onApiAuthError = useCallback(async () => {
+    // Token expired on an API call (prompt, steer, etc.) — refresh and retry
+    return refreshActiveServerSession();
+  }, [refreshActiveServerSession]);
+
   const piClientConfig = useMemo<PiClientConfig>(
     () => ({
       serverUrl: serverAddress,
       accessToken,
       onAuthError,
+      onApiAuthError,
     }),
-    [serverAddress, accessToken, onAuthError],
+    [serverAddress, accessToken, onAuthError, onApiAuthError],
   );
 
   useEffect(() => {

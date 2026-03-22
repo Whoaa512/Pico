@@ -48,7 +48,13 @@ export interface PaginatedSessions {
 export interface PiClientConfig {
   serverUrl: string;
   accessToken: string;
+  /** Called when the SSE stream gets a 401. Should attempt to refresh the token. */
   onAuthError?: () => void;
+  /**
+   * Called when an API call gets a 401. Should refresh the token, call
+   * updateToken(), and return true. The failed request will be retried.
+   */
+  onApiAuthError?: () => Promise<boolean>;
   transport?: "sse" | "ws";
   reconnectBaseMs?: number;
   reconnectMaxMs?: number;
