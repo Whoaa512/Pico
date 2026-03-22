@@ -46,15 +46,15 @@ function createStyles(colors: {
     h1: {
       fontSize: 20,
       lineHeight: 28,
-      fontFamily: Fonts.sansBold,
-      fontWeight: "bold",
+      fontFamily: Fonts.sansSemiBold,
+      fontWeight: "600",
       color: colors.textStrong,
     },
     h2: {
       fontSize: 18,
       lineHeight: 26,
-      fontFamily: Fonts.sansBold,
-      fontWeight: "bold",
+      fontFamily: Fonts.sansSemiBold,
+      fontWeight: "600",
       color: colors.textStrong,
     },
     h3: {

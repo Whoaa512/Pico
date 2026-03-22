@@ -1519,8 +1519,8 @@ const subagentStyles = StyleSheet.create({
   },
   stepVerb: {
     fontSize: 12,
-    fontFamily: Fonts.sansBold,
-    fontWeight: "bold",
+    fontFamily: Fonts.sansSemiBold,
+    fontWeight: "600",
   },
   stepDetail: {
     fontSize: 12,
@@ -1740,8 +1740,8 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 13,
-    fontFamily: Fonts.sansBold,
-    fontWeight: "bold",
+    fontFamily: Fonts.sansSemiBold,
+    fontWeight: "600",
   },
   animatedLabelRow: {
     flexDirection: "row",
@@ -1752,8 +1752,8 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   verb: {
-    fontFamily: Fonts.sansBold,
-    fontWeight: "bold",
+    fontFamily: Fonts.sansSemiBold,
+    fontWeight: "600",
     fontSize: 13,
   },
   detail: {

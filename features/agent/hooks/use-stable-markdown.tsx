@@ -65,7 +65,7 @@ function buildStyles(
 
   return StyleSheet.create({
     em: StyleSheet.flatten([fontRegular, { fontStyle: "italic" as const }, userStyles?.em]) ?? {},
-    strong: StyleSheet.flatten([fontRegular, { fontWeight: "bold" as const }, userStyles?.strong]) ?? {},
+    strong: StyleSheet.flatten([fontRegular, { fontWeight: "600" as const }, userStyles?.strong]) ?? {},
     strikethrough: StyleSheet.flatten([
       fontRegular,
       { textDecorationLine: "line-through" as const, textDecorationStyle: "solid" as const },
@@ -90,7 +90,7 @@ function buildStyles(
     h1: StyleSheet.flatten([
       fontHeading,
       {
-        fontSize: 32, lineHeight: 40, fontWeight: "bold" as const,
+        fontSize: 32, lineHeight: 40, fontWeight: "600" as const,
         marginVertical: mdSpacing.m, letterSpacing: 0,
         paddingBottom: mdSpacing.s, borderBottomColor: mdColors.border, borderBottomWidth: 1,
       },
