@@ -51,20 +51,19 @@ export function EditToolCall({ tc }: { tc: ToolCallInfo }) {
   const addColor = isDark ? "#3FB950" : "#1A7F37";
   const removeColor = isDark ? "#F85149" : "#CF222E";
 
-  // Edit tool uses search/replace — no need for expensive LCS diff.
-  const showContent = expanded || sheetOpen;
+  // Edit tool uses search/replace — simpleDiff is cheap, always compute.
   const ops = useMemo(() => {
-    if (!showContent || (!oldText && !newText)) return [];
+    if (!oldText && !newText) return [];
     return simpleDiff(oldText, newText);
-  }, [showContent, oldText, newText]);
+  }, [oldText, newText]);
 
   const sideBySideRows = useMemo(() => {
-    if (!showContent || viewMode !== "split") return [];
+    if (viewMode !== "split") return [];
     return buildSideBySide(ops);
-  }, [showContent, viewMode, ops]);
+  }, [viewMode, ops]);
 
   const inlineRows = useMemo(() => {
-    if (!showContent || viewMode !== "inline") return [];
+    if (viewMode !== "inline") return [];
     return buildInline(ops);
   }, [expanded, viewMode, ops]);
 
