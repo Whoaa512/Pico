@@ -69,20 +69,21 @@ export function WriteToolCall({ tc }: { tc: ToolCallInfo }) {
 
   const oldText = baseline?.kind === "content" ? baseline.content : "";
   const previewRows = useMemo(() => buildCodeRows(newText, 1), [newText]);
+  const showContent = expanded || sheetOpen;
   const ops = useMemo(() => {
-    if (!expanded || (!oldText && !newText)) return [];
+    if (!showContent || (!oldText && !newText)) return [];
     return lcsLineDiff(oldText, newText);
-  }, [expanded, oldText, newText]);
+  }, [showContent, oldText, newText]);
 
   const sideBySideRows = useMemo(() => {
-    if (!expanded || viewMode !== "split") return [];
+    if (!showContent || viewMode !== "split") return [];
     return buildSideBySide(ops);
-  }, [expanded, viewMode, ops]);
+  }, [showContent, viewMode, ops]);
 
   const inlineRows = useMemo(() => {
-    if (!expanded || viewMode !== "inline") return [];
+    if (!showContent || viewMode !== "inline") return [];
     return buildInline(ops);
-  }, [expanded, viewMode, ops]);
+  }, [showContent, viewMode, ops]);
 
   const textColor = isDark ? "#CCCCCC" : "#1A1A1A";
   const mutedColor = isDark ? "#888" : "#888";
