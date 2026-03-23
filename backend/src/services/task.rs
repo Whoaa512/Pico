@@ -57,10 +57,11 @@ impl TaskManager {
 
     /// Read .pi/tasks.json from a workspace path, then merge with auto-detected tasks
     pub fn read_tasks_config(workspace_path: &str) -> Result<TasksConfig, String> {
+        let workspace_path = expand_tilde(workspace_path);
         let mut all_tasks: Vec<TaskDefinition> = Vec::new();
 
         // 1. Read .pi/tasks.json (explicit user tasks)
-        let config_path = std::path::Path::new(workspace_path).join(".pi/tasks.json");
+        let config_path = std::path::Path::new(&workspace_path).join(".pi/tasks.json");
         if config_path.exists() {
             let content = std::fs::read_to_string(&config_path)
                 .map_err(|e| format!("Failed to read tasks config: {e}"))?;
@@ -91,7 +92,7 @@ impl TaskManager {
         }
 
         // 2. Auto-detect tasks from common project files
-        let base = std::path::Path::new(workspace_path);
+        let base = std::path::Path::new(&workspace_path);
         let explicit_labels: std::collections::HashSet<String> =
             all_tasks.iter().map(|t| t.label.clone()).collect();
 
@@ -936,4 +937,13 @@ async fn emit_task_output(
         buf.push_back(stream_event.clone());
     }
     let _ = broadcast_tx.send(stream_event);
+}
+
+fn expand_tilde(path: &str) -> String {
+    if path.starts_with("~/") {
+        if let Ok(home) = std::env::var("HOME") {
+            return format!("{}{}", home, &path[1..]);
+        }
+    }
+    path.to_string()
 }

@@ -25,7 +25,7 @@ import { SquarePen, RefreshCw, Plus } from 'lucide-react-native';
 import { Colors, Fonts } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useWorkspaceStore } from '@/features/workspace/store';
-import { useSessions } from '@/features/workspace/hooks/use-sessions';
+import { useWorkspaceSessions as useSessions } from '@pi-ui/client';
 import { usePiClient } from '@pi-ui/client';
 import { requestBrowserNotificationPermission } from '@/features/agent/browser-notifications';
 import { NewWorkspaceDialog } from '@/features/workspace/components/new-workspace-dialog';

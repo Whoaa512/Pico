@@ -13,8 +13,8 @@ import { SquarePen, RefreshCw } from 'lucide-react-native';
 
 import { Colors, Fonts } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { useChatSessions } from '../hooks/use-chat-sessions';
-import type { SessionListItem } from '@/features/api/generated/types.gen';
+import { useChatSessions } from '@pi-ui/client';
+import type { SessionListItem } from '@pi-ui/client';
 import { SessionActivityIndicator } from '@/features/workspace/components/session-activity-indicator';
 
 interface ChatSidebarProps {

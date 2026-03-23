@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -13,7 +13,47 @@ import { Check, Circle, CircleDot, X } from "lucide-react-native";
 import { Fonts } from "@/constants/theme";
 import { usePromptTheme } from "@/features/workspace/components/prompt-input/use-theme-colors";
 import type { PendingExtensionUiRequest } from "../extension-ui";
-import { useSendExtensionUiResponse } from "../hooks/use-agent-session";
+import { usePiClient } from "@pi-ui/client";
+import { useAgentStore } from "../store";
+
+function useSendExtensionUiResponse() {
+  const client = usePiClient();
+  const [isPending, setIsPending] = useState(false);
+  const [isError, setIsError] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  const mutate = useCallback(
+    async (params: {
+      sessionId: string;
+      id: string;
+      value?: unknown;
+      confirmed?: boolean;
+      cancelled?: boolean;
+    }) => {
+      setIsPending(true);
+      setIsError(false);
+      setError(null);
+      try {
+        await client.sendExtensionUiResponse({
+          sessionId: params.sessionId,
+          id: params.id,
+          value: params.value as string | undefined,
+          confirmed: params.confirmed,
+          cancelled: params.cancelled,
+        });
+        useAgentStore.getState().setPendingExtensionUiRequest(params.sessionId, null);
+      } catch (e: any) {
+        setIsError(true);
+        setError(e instanceof Error ? e : new Error(e?.message ?? "Failed"));
+      } finally {
+        setIsPending(false);
+      }
+    },
+    [client],
+  );
+
+  return { mutate, isPending, isError, error };
+}
 
 function getRequestTitle(request: PendingExtensionUiRequest): string {
   if (request.title?.trim()) return request.title;

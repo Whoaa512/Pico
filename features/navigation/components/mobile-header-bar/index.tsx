@@ -7,18 +7,19 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAppMode } from '@/hooks/use-app-mode';
 import { useWorkspaceStore } from '@/features/workspace/store';
 import { useChatStore } from '@/features/chat/store';
-import { useGitStatus, useNestedRepos } from '@/features/workspace/hooks/use-git-status';
+import { useGitStatus, useNestedRepos } from '@pi-ui/client';
 import { remotesToLinks, type RemoteLink } from '@/features/workspace/utils/git-remote-url';
-import { MobileTasksButton } from '@/features/tasks/components/mobile-tasks-button';
+import { MobileTaskSelector } from '@/features/tasks/components/mobile-tasks-button';
 
 interface MobileHeaderBarProps {
   onWorkspacePress: () => void;
   onGitPress: () => void;
   onChatSessionsPress?: () => void;
   onTasksPress?: () => void;
+  onTaskOutputPress?: () => void;
 }
 
-export function MobileHeaderBar({ onWorkspacePress, onGitPress, onChatSessionsPress, onTasksPress }: MobileHeaderBarProps) {
+export function MobileHeaderBar({ onWorkspacePress, onGitPress, onChatSessionsPress, onTasksPress, onTaskOutputPress }: MobileHeaderBarProps) {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
   const isDark = colorScheme === 'dark';
@@ -32,7 +33,7 @@ export function MobileHeaderBar({ onWorkspacePress, onGitPress, onChatSessionsPr
 
   const cwd = appMode === 'code' ? (workspace?.path ?? null) : null;
   const { data: gitData } = useGitStatus(cwd);
-  const { data: nestedRepos } = useNestedRepos(cwd);
+  const { repos: nestedRepos } = useNestedRepos(cwd);
 
   // Collect all remote links: root repo + nested repos
   const allLinks: Array<RemoteLink & { repoPath?: string }> = [];
@@ -129,10 +130,11 @@ export function MobileHeaderBar({ onWorkspacePress, onGitPress, onChatSessionsPr
           </Pressable>
         )}
         {appMode === 'code' && (
-          <MobileTasksButton
+          <MobileTaskSelector
             color={textPrimary}
             bgColor={buttonBg}
             onPress={onTasksPress ?? (() => {})}
+            onOutputPress={onTaskOutputPress ?? (() => {})}
           />
         )}
         {appMode === 'code' && (

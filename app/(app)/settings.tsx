@@ -32,13 +32,13 @@ import { useAppSettingsStore, ThemeMode } from '@/features/settings/store';
 import { SpeechSettings } from '@/features/speech/components/speech-settings';
 import { CustomModelsSection } from '@/features/settings/components/custom-models-section';
 import { useChatStore } from '@/features/chat/store';
-import {
-  status2 as getPackageStatus,
-  update as updatePackage,
-  install as installPackage,
-} from '@/features/api/generated/sdk.gen';
-import { unwrapApiData } from '@/features/api/unwrap';
-import type { PackageStatus } from '@/features/api/generated/types.gen';
+import { sdk, unwrapApiData } from '@pi-ui/client';
+import type { PackageStatus } from '@pi-ui/client';
+const {
+  status2: getPackageStatus,
+  update: updatePackage,
+  install: installPackage,
+} = sdk;
 
 // ─── Shared components ────────────────────────────────────────
 
@@ -308,7 +308,7 @@ export default function SettingsScreen() {
   const textMuted = isDark ? '#cdc8c5' : colors.textTertiary;
   const bg = isDark ? '#121212' : colors.background;
 
-  const { themeMode, pushNotifications, soundEffects, loaded, load, update } =
+  const { themeMode, pushNotifications, soundEffects, diffPanelAutoOpen, loaded, load, update } =
     useAppSettingsStore();
 
   const chatNoTools = useChatStore((s) => s.noTools);
@@ -360,6 +360,18 @@ export default function SettingsScreen() {
               <Switch
                 value={!chatNoTools}
                 onValueChange={(v) => setChatNoTools(!v)}
+                trackColor={{ false: isDark ? '#3b3a39' : '#E0E0E0', true: '#D71921' }}
+              />
+            }
+          />
+          <SettingsRow
+            label="Auto-open Diff Panel"
+            description="Automatically show file changes in the sidebar when the agent edits or writes files"
+            isDark={isDark}
+            right={
+              <Switch
+                value={diffPanelAutoOpen}
+                onValueChange={(v) => update({ diffPanelAutoOpen: v })}
                 trackColor={{ false: isDark ? '#3b3a39' : '#E0E0E0', true: '#D71921' }}
               />
             }

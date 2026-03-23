@@ -3,10 +3,6 @@ import { usePiClient } from '@pi-ui/client';
 import { useTasksStore } from '../store';
 import { handleTaskStreamEvent } from '../hooks/use-task-events';
 
-/**
- * Invisible component that subscribes to the PiClient event stream
- * and dispatches task-related events to the tasks store.
- */
 export function TaskEventSubscriber() {
   const client = usePiClient();
   const appendLogLine = useTasksStore((s) => s.appendLogLine);

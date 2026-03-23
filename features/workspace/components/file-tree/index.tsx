@@ -20,8 +20,8 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 import {
   useFileList,
   useFileRead,
-  type FsEntry,
-} from "@/features/workspace/hooks/use-file-list";
+} from "@pi-ui/client";
+import type { FsEntry } from "@pi-ui/client";
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -81,16 +81,16 @@ function FileTreeRoot({
   expandedDirs: Set<string>;
   onToggleDir: (path: string) => void;
 }) {
-  const { data: entries, isLoading, isError, error } = useFileList(rootPath);
+  const { entries, isLoading, error } = useFileList(rootPath);
 
   if (isLoading) {
     return <ActivityIndicator style={{ marginTop: 32 }} />;
   }
 
-  if (isError) {
+  if (error) {
     return (
       <Text style={[styles.emptyText, { color: textMuted }]}>
-        Failed to load: {(error as Error)?.message ?? "Unknown error"}
+        Failed to load: {error}
       </Text>
     );
   }
@@ -233,7 +233,7 @@ function ExpandedDir({
   const isDark = colorScheme === "dark";
   const textMuted = isDark ? "#cdc8c5" : Colors[colorScheme].textTertiary;
 
-  const { data: entries, isLoading } = useFileList(dirPath);
+  const { entries, isLoading } = useFileList(dirPath);
 
   if (isLoading) {
     return (
@@ -298,7 +298,7 @@ function FileViewer({
 
   const fileName = filePath.split("/").pop() ?? filePath;
 
-  const { data: fileData, isLoading, isError } = useFileRead(filePath);
+  const { data: fileData, isLoading, error: fileError } = useFileRead(filePath);
 
   return (
     <View style={styles.viewerContainer}>
@@ -338,7 +338,7 @@ function FileViewer({
       {/* Scrollable content */}
       {isLoading ? (
         <ActivityIndicator style={{ marginTop: 32 }} />
-      ) : isError ? (
+      ) : fileError ? (
         <Text style={[styles.emptyText, { color: textMuted }]}>
           Cannot read file
         </Text>

@@ -12,6 +12,7 @@ interface AppSettings {
   pushNotifications: boolean;
   soundEffects: boolean;
   diffViewMode: DiffViewMode;
+  diffPanelAutoOpen: boolean;
 }
 
 interface AppSettingsState extends AppSettings {
@@ -25,6 +26,7 @@ const DEFAULTS: AppSettings = {
   pushNotifications: true,
   soundEffects: false,
   diffViewMode: 'inline',
+  diffPanelAutoOpen: true,
 };
 
 async function readFromStore(): Promise<Partial<AppSettings>> {
@@ -69,6 +71,7 @@ export const useAppSettingsStore = create<AppSettingsState>((set, get) => ({
       pushNotifications: partial.pushNotifications ?? current.pushNotifications,
       soundEffects: partial.soundEffects ?? current.soundEffects,
       diffViewMode: partial.diffViewMode ?? current.diffViewMode,
+      diffPanelAutoOpen: partial.diffPanelAutoOpen ?? current.diffPanelAutoOpen,
     };
     set(next);
     await writeToStore(next);

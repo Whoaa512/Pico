@@ -26,7 +26,6 @@ import { useSpeechSettingsStore } from "@/features/speech/store";
 import {
   SlashCommand,
   Attachment,
-  LARGE_PASTE_THRESHOLD,
 } from "./constants";
 import { usePromptTheme } from "./use-theme-colors";
 import { SlashCommandDropdown } from "./slash-command-dropdown";
@@ -392,47 +391,6 @@ export function PromptInput({
     e.target.value = "";
   }, [addAttachment]);
 
-  // --- Paste ---
-  useEffect(() => {
-    if (Platform.OS !== "web") return;
-    const handlePaste = (e: ClipboardEvent) => {
-      const items = e.clipboardData?.items;
-      if (!items) return;
-      for (let i = 0; i < items.length; i++) {
-        const item = items[i];
-        if (item.type.startsWith("image/")) {
-          e.preventDefault();
-          const blob = item.getAsFile();
-          if (!blob) continue;
-          const reader = new FileReader();
-          reader.onload = () => {
-            addAttachment({
-              id: `${Date.now()}-${Math.random()}`,
-              name: `pasted-image-${Date.now()}.png`,
-              type: "image",
-              size: blob.size,
-              preview: reader.result as string,
-            });
-          };
-          reader.readAsDataURL(blob);
-          return;
-        }
-      }
-      const pastedText = e.clipboardData?.getData("text/plain");
-      if (pastedText && pastedText.length > LARGE_PASTE_THRESHOLD) {
-        e.preventDefault();
-        addAttachment({
-          id: `${Date.now()}-${Math.random()}`,
-          name: `pasted-text-${Date.now()}.txt`,
-          type: "text",
-          size: pastedText.length,
-        });
-      }
-    };
-    document.addEventListener("paste", handlePaste);
-    return () => document.removeEventListener("paste", handlePaste);
-  }, [addAttachment]);
-
   // --- Keyboard nav for slash commands ---
   const handleKeyPress = useCallback((e: NativeSyntheticEvent<PromptKeyPressEventData>) => {
     const { key, shiftKey, isComposing, keyCode } = e.nativeEvent;
@@ -623,12 +581,12 @@ export function PromptInput({
               accessibilityRole="button"
               accessibilityLabel={showAbortButton ? "Stop generation" : "Send message"}
               onPress={handleSubmit}
-              disabled={sendDisabled}
+              disabled={sendDisabled || (!showAbortButton && !hasDraft)}
               style={({ pressed }) => [
                 styles.sendButton,
                 {
                   backgroundColor: theme.isDark ? "#4d4d4b" : theme.colors.text,
-                  opacity: sendDisabled ? 0.45 : pressed ? 0.85 : 1,
+                  opacity: (sendDisabled || (!showAbortButton && !hasDraft)) ? 0.45 : pressed ? 0.85 : 1,
                 },
               ]}
             >

@@ -11,6 +11,25 @@ import type {
   SessionTreeNode,
   Workspace,
   AuthTokensResponse,
+  GitStatusResponse,
+  GitBranch,
+  GitLogEntry,
+  GitDiffResponse,
+  GitFileDiffResponse,
+  GitStashEntry,
+  GitWorktree,
+  NestedGitReposResponse,
+  PackageStatus,
+  TaskInfo,
+  TasksConfig,
+  TaskLogs,
+  TaskDefinition,
+  CustomModelsConfig,
+  CustomProvider,
+  FsListResponse,
+  FsReadResponse,
+  FsEntry,
+  PathCompletion,
 } from "../generated/types.gen";
 import type { ImageContent } from "../types/stream-events";
 
@@ -23,7 +42,12 @@ function unwrapResult<T>(result: { data?: unknown; error?: unknown }): T {
     throw new Error("Request failed");
   }
   const body = result.data;
-  if (body !== null && body !== undefined && typeof body === "object" && "success" in body) {
+  if (
+    body !== null &&
+    body !== undefined &&
+    typeof body === "object" &&
+    "success" in body
+  ) {
     const envelope = body as { success: boolean; data?: T; error?: string };
     if (envelope.success === false) {
       throw new Error(envelope.error ?? "Request failed");
@@ -42,43 +66,45 @@ export class ApiClient {
     this._serverUrl = serverUrl;
     this._accessToken = accessToken;
     defaultClient.setConfig({ baseUrl: serverUrl });
-    defaultClient.interceptors.request.use((request) => {
+    defaultClient.interceptors.request.use((request: Request) => {
       request.headers.set("Authorization", `Bearer ${this._accessToken}`);
       return request;
     });
 
-    // Retry once on 401 after refreshing the token
-    defaultClient.interceptors.response.use(async (response, request, opts) => {
-      if (
-        response.status !== 401 ||
-        (opts as { _authRetry?: boolean })._authRetry ||
-        !this._onAuthError
-      ) {
-        return response;
-      }
+    defaultClient.interceptors.response.use(
+      async (response: Response, request: Request, opts: any) => {
+        if (
+          response.status !== 401 ||
+          (opts as { _authRetry?: boolean })._authRetry ||
+          !this._onAuthError
+        ) {
+          return response;
+        }
 
-      // Skip retry for auth endpoints
-      const path = opts.url ?? "";
-      if (path.includes("/auth/")) return response;
+        const path = opts.url ?? "";
+        if (path.includes("/auth/")) return response;
 
-      const refreshed = await this._onAuthError();
-      if (!refreshed) return response;
+        const refreshed = await this._onAuthError();
+        if (!refreshed) return response;
 
-      // Retry with the fresh token
-      const retryHeaders = new Headers(request.headers);
-      retryHeaders.set("Authorization", `Bearer ${this._accessToken}`);
+        const retryHeaders = new Headers(request.headers);
+        retryHeaders.set("Authorization", `Bearer ${this._accessToken}`);
 
-      try {
-        return await fetch(request.url, {
-          method: request.method,
-          headers: retryHeaders,
-          body: request.method !== "GET" && request.method !== "HEAD" ? request.body : undefined,
-          signal: request.signal,
-        });
-      } catch {
-        return response;
-      }
-    });
+        try {
+          return await fetch(request.url, {
+            method: request.method,
+            headers: retryHeaders,
+            body:
+              request.method !== "GET" && request.method !== "HEAD"
+                ? request.body
+                : undefined,
+            signal: request.signal,
+          });
+        } catch {
+          return response;
+        }
+      },
+    );
   }
 
   get serverUrl(): string {
@@ -89,15 +115,16 @@ export class ApiClient {
     return this._accessToken;
   }
 
+  updateConfig(serverUrl: string, accessToken: string): void {
+    this._serverUrl = serverUrl;
+    this._accessToken = accessToken;
+    defaultClient.setConfig({ baseUrl: serverUrl });
+  }
+
   updateToken(accessToken: string): void {
     this._accessToken = accessToken;
   }
 
-  /**
-   * Set a callback that is invoked when a 401 response is received.
-   * The callback should attempt to refresh the token and return true
-   * if successful (the request will be retried with the new token).
-   */
   setAuthErrorHandler(handler: () => Promise<boolean>): void {
     this._onAuthError = handler;
   }
@@ -106,21 +133,46 @@ export class ApiClient {
   // Auth
   // ---------------------------------------------------------------------------
 
-  async login(username: string, password: string): Promise<AuthTokensResponse> {
-    const result = await sdk.login({ body: { username, password } });
+  async login(
+    username: string,
+    password: string,
+    baseUrl?: string,
+  ): Promise<AuthTokensResponse> {
+    const result = await sdk.login({
+      body: { username, password },
+      ...(baseUrl && { baseUrl }),
+    });
     return unwrapResult<AuthTokensResponse>(result);
   }
 
-  async refresh(refreshToken: string): Promise<AuthTokensResponse> {
-    const result = await sdk.refresh({ body: { refresh_token: refreshToken } });
+  async refresh(
+    refreshToken: string,
+    baseUrl?: string,
+  ): Promise<AuthTokensResponse> {
+    const result = await sdk.refresh({
+      body: { refresh_token: refreshToken },
+      ...(baseUrl && { baseUrl }),
+    });
     return unwrapResult<AuthTokensResponse>(result);
   }
 
-  async logout(refreshToken?: string): Promise<void> {
+  async logout(refreshToken?: string, baseUrl?: string): Promise<void> {
     const result = await sdk.logout({
       body: refreshToken ? { refresh_token: refreshToken } : undefined,
+      ...(baseUrl && { baseUrl }),
     });
     unwrapResult(result);
+  }
+
+  async pair(
+    qrId: string,
+    baseUrl?: string,
+  ): Promise<AuthTokensResponse> {
+    const result = await sdk.pair({
+      body: { qr_id: qrId },
+      ...(baseUrl && { baseUrl }),
+    });
+    return unwrapResult<AuthTokensResponse>(result);
   }
 
   async checkSession(): Promise<void> {
@@ -261,7 +313,9 @@ export class ApiClient {
     return unwrapResult<Record<string, string>>(result);
   }
 
-  async getMessages(sessionId: string): Promise<{ messages: Record<string, string>[] }> {
+  async getMessages(
+    sessionId: string,
+  ): Promise<{ messages: Record<string, string>[] }> {
     const result = await sdk.getMessages({
       body: { session_id: sessionId },
     });
@@ -330,14 +384,20 @@ export class ApiClient {
   // Agent — compaction & retry
   // ---------------------------------------------------------------------------
 
-  async compact(sessionId: string, customInstructions?: string): Promise<void> {
+  async compact(
+    sessionId: string,
+    customInstructions?: string,
+  ): Promise<void> {
     const result = await sdk.compact({
       body: { session_id: sessionId, customInstructions },
     });
     unwrapResult(result);
   }
 
-  async setAutoCompaction(sessionId: string, enabled: boolean): Promise<void> {
+  async setAutoCompaction(
+    sessionId: string,
+    enabled: boolean,
+  ): Promise<void> {
     const result = await sdk.setAutoCompaction({
       body: { session_id: sessionId, enabled },
     });
@@ -428,7 +488,9 @@ export class ApiClient {
     return unwrapResult(result);
   }
 
-  async getLastAssistantText(sessionId: string): Promise<{ text: string | null }> {
+  async getLastAssistantText(
+    sessionId: string,
+  ): Promise<{ text: string | null }> {
     const result = await sdk.getLastAssistantText({
       body: { session_id: sessionId },
     });
@@ -447,7 +509,13 @@ export class ApiClient {
     toolCalls: number;
     toolResults: number;
     totalMessages: number;
-    tokens: { input: number; output: number; cacheRead: number; cacheWrite: number; total: number };
+    tokens: {
+      input: number;
+      output: number;
+      cacheRead: number;
+      cacheWrite: number;
+      total: number;
+    };
     cost: number;
   }> {
     const result = await sdk.getSessionStats({
@@ -473,15 +541,18 @@ export class ApiClient {
     unwrapResult(result);
   }
 
-  async getCommands(
-    sessionId: string,
-  ): Promise<{
+  async getCommands(sessionId: string): Promise<{
     commands: Array<{
       name: string;
       description?: string;
-      source: "extension" | "prompt" | "skill";
+      source?: "extension" | "prompt" | "skill";
       location?: "user" | "project" | "path";
       path?: string;
+      sourceInfo?: {
+        path?: string;
+        scope?: "user" | "project";
+        source?: string;
+      };
     }>;
   }> {
     const result = await sdk.getCommands({
@@ -711,6 +782,252 @@ export class ApiClient {
       path: { id: workspaceId, session_id: sessionId, entry_id: entryId },
     });
     return unwrapResult<SessionEntry[]>(result);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Git
+  // ---------------------------------------------------------------------------
+
+  async gitStatus(cwd: string): Promise<GitStatusResponse> {
+    const result = await sdk.status({ query: { cwd } });
+    return unwrapResult<GitStatusResponse>(result);
+  }
+
+  async gitBranches(cwd: string): Promise<GitBranch[]> {
+    const result = await sdk.branches({ query: { cwd } });
+    return unwrapResult<GitBranch[]>(result);
+  }
+
+  async gitCheckout(
+    cwd: string,
+    params: { branch: string; create?: boolean },
+  ): Promise<void> {
+    const result = await sdk.checkout({
+      query: { cwd },
+      body: {
+        branch: params.branch,
+        create: params.create,
+      },
+    });
+    unwrapResult(result);
+  }
+
+  async gitCommit(cwd: string, message: string): Promise<void> {
+    const result = await sdk.commit({ query: { cwd }, body: { message } });
+    unwrapResult(result);
+  }
+
+  async gitDiff(
+    cwd: string,
+    staged?: boolean,
+  ): Promise<GitDiffResponse> {
+    const result = await sdk.diff({ query: { cwd, staged } });
+    return unwrapResult<GitDiffResponse>(result);
+  }
+
+  async gitDiffFile(
+    cwd: string,
+    path: string,
+    staged?: boolean,
+  ): Promise<GitFileDiffResponse> {
+    const result = await sdk.diffFile({ query: { cwd, path, staged } });
+    return unwrapResult<GitFileDiffResponse>(result);
+  }
+
+  async gitDiscard(cwd: string, paths: string[]): Promise<void> {
+    const result = await sdk.discard({ query: { cwd }, body: { paths } });
+    unwrapResult(result);
+  }
+
+  async gitLog(
+    cwd: string,
+    count?: number,
+  ): Promise<GitLogEntry[]> {
+    const result = await sdk.log({ query: { cwd, count } });
+    return unwrapResult<GitLogEntry[]>(result);
+  }
+
+  async gitStage(cwd: string, paths: string[]): Promise<void> {
+    const result = await sdk.stage({ query: { cwd }, body: { paths } });
+    unwrapResult(result);
+  }
+
+  async gitUnstage(cwd: string, paths: string[]): Promise<void> {
+    const result = await sdk.unstage({ query: { cwd }, body: { paths } });
+    unwrapResult(result);
+  }
+
+  async gitNestedRepos(cwd: string): Promise<NestedGitReposResponse> {
+    const result = await sdk.nestedRepos({ query: { cwd } });
+    return unwrapResult<NestedGitReposResponse>(result);
+  }
+
+  async gitStashList(cwd: string): Promise<GitStashEntry[]> {
+    const result = await sdk.stashList({ query: { cwd } });
+    return unwrapResult<GitStashEntry[]>(result);
+  }
+
+  async gitStashPush(cwd: string, message?: string): Promise<void> {
+    const result = await sdk.stashPush({
+      query: { cwd, message },
+    });
+    unwrapResult(result);
+  }
+
+  async gitStashApply(cwd: string, index?: number, pop?: boolean): Promise<void> {
+    const result = await sdk.stashApply({
+      query: { cwd },
+      body: { index, pop },
+    });
+    unwrapResult(result);
+  }
+
+  async gitStashDrop(cwd: string, index: number): Promise<void> {
+    const result = await sdk.stashDrop({
+      query: { cwd, index },
+    });
+    unwrapResult(result);
+  }
+
+  async gitWorktreeList(cwd: string): Promise<GitWorktree[]> {
+    const result = await sdk.worktreeList({ query: { cwd } });
+    return unwrapResult<GitWorktree[]>(result);
+  }
+
+  async gitWorktreeAdd(
+    cwd: string,
+    params: { path: string; branch?: string; newBranch?: string },
+  ): Promise<void> {
+    const result = await sdk.worktreeAdd({
+      query: { cwd },
+      body: {
+        path: params.path,
+        branch: params.branch,
+        new_branch: params.newBranch,
+      },
+    });
+    unwrapResult(result);
+  }
+
+  async gitWorktreeRemove(cwd: string, path: string): Promise<void> {
+    const result = await sdk.worktreeRemove({
+      query: { cwd },
+      body: { path },
+    });
+    unwrapResult(result);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Filesystem
+  // ---------------------------------------------------------------------------
+
+  async fsList(path: string): Promise<FsListResponse> {
+    const result = await sdk.list({ query: { path } });
+    return unwrapResult<FsListResponse>(result);
+  }
+
+  async fsRead(path: string): Promise<FsReadResponse> {
+    const result = await sdk.read({ query: { path } });
+    return unwrapResult<FsReadResponse>(result);
+  }
+
+  async fsWrite(path: string, content: string): Promise<void> {
+    const result = await sdk.write({ body: { path, content } });
+    unwrapResult(result);
+  }
+
+  async fsDelete(path: string): Promise<void> {
+    const result = await sdk.delete_({ body: { path } });
+    unwrapResult(result);
+  }
+
+  async fsMkdir(path: string): Promise<void> {
+    const result = await sdk.mkdir({ body: { path } });
+    unwrapResult(result);
+  }
+
+  async fsComplete(input: string): Promise<PathCompletion[]> {
+    const result = await sdk.complete({ query: { q: input } });
+    return unwrapResult<PathCompletion[]>(result);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Package management
+  // ---------------------------------------------------------------------------
+
+  async packageStatus(): Promise<PackageStatus> {
+    const result = await sdk.status2({});
+    return unwrapResult<PackageStatus>(result);
+  }
+
+  async packageUpdate(): Promise<void> {
+    const result = await sdk.update({});
+    unwrapResult(result);
+  }
+
+  async packageInstall(): Promise<void> {
+    const result = await sdk.install({});
+    unwrapResult(result);
+  }
+
+  async packageLogs(limit?: number): Promise<TaskLogs> {
+    const result = await sdk.logs({ query: { limit } });
+    return unwrapResult<TaskLogs>(result);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Tasks
+  // ---------------------------------------------------------------------------
+
+  async getTaskConfig(workspaceId: string): Promise<TasksConfig> {
+    const result = await sdk.getConfig({ path: { workspace_id: workspaceId } });
+    return unwrapResult<TasksConfig>(result);
+  }
+
+  async listTasks(workspaceId: string): Promise<TaskInfo[]> {
+    const result = await sdk.listTasks({ path: { workspace_id: workspaceId } });
+    return unwrapResult<TaskInfo[]>(result);
+  }
+
+  async startTask(label: string, workspaceId: string): Promise<TaskInfo> {
+    const result = await sdk.startTask({
+      body: { label, workspace_id: workspaceId },
+    });
+    return unwrapResult<TaskInfo>(result);
+  }
+
+  async stopTask(taskId: string): Promise<TaskInfo> {
+    const result = await sdk.stopTask({ body: { task_id: taskId } });
+    return unwrapResult<TaskInfo>(result);
+  }
+
+  async restartTask(taskId: string): Promise<TaskInfo> {
+    const result = await sdk.restartTask({ body: { task_id: taskId } });
+    return unwrapResult<TaskInfo>(result);
+  }
+
+  async removeTask(taskId: string): Promise<void> {
+    const result = await sdk.removeTask({ path: { task_id: taskId } });
+    unwrapResult(result);
+  }
+
+  async getTaskLogs(taskId: string): Promise<TaskLogs> {
+    const result = await sdk.getLogs({ path: { task_id: taskId } });
+    return unwrapResult<TaskLogs>(result);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Custom models
+  // ---------------------------------------------------------------------------
+
+  async getCustomModels(): Promise<CustomModelsConfig> {
+    const result = await sdk.getCustomModels({});
+    return unwrapResult<CustomModelsConfig>(result);
+  }
+
+  async saveCustomModels(config: { providers: Record<string, CustomProvider> }): Promise<void> {
+    const result = await sdk.saveCustomModels({ body: { providers: config.providers } });
+    unwrapResult(result);
   }
 
   // ---------------------------------------------------------------------------

@@ -78,10 +78,7 @@ export function QrScanner({ visible, onClose, onNeedNewWorkspace }: QrScannerPro
 
     if (result.success) {
       setStep("done");
-      // Brief pause to show success, then close modal, add server, and navigate
       setTimeout(async () => {
-        // Close scanner first so the servers screen doesn't react to the new server
-        onClose();
         await useServersStore.getState().addServer({
           id: serverId,
           name: existingServer?.name || params.hostname || ip,
@@ -90,15 +87,7 @@ export function QrScanner({ visible, onClose, onNeedNewWorkspace }: QrScannerPro
           password: existingServer?.password ?? "",
         });
         reset();
-        // Fetch workspaces and navigate directly
-        await useWorkspaceStore.getState().fetchWorkspaces();
-        const { workspaces, selectedWorkspaceId } = useWorkspaceStore.getState();
-        const targetId = selectedWorkspaceId ?? workspaces[0]?.id;
-        if (targetId) {
-          router.replace(`/workspace/${targetId}`);
-        } else if (onNeedNewWorkspace) {
-          onNeedNewWorkspace();
-        }
+        onClose();
       }, 800);
     } else {
       setStep("error");

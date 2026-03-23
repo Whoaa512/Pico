@@ -20,7 +20,7 @@ import { Settings, Server } from 'lucide-react-native';
 
 import { Colors, Fonts } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { useChatSessions } from '../hooks/use-chat-sessions';
+import { useChatSessions } from '@pi-ui/client';
 import { useChatStore } from '../store';
 import { SessionSheetContent } from '@/features/navigation/components/session-sheet-content';
 

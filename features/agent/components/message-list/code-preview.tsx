@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { ScrollView, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
 import { Fonts } from "@/constants/theme";
 
 // ---------------------------------------------------------------------------
@@ -314,15 +314,17 @@ export function CodePreview({
   lineNoBg,
   lineNoColor,
   rowBackgroundColor,
+  scrollStyle,
 }: {
   rows: CodeRow[];
   isDark: boolean;
   lineNoBg: string;
   lineNoColor: string;
   rowBackgroundColor?: string;
+  scrollStyle?: StyleProp<ViewStyle>;
 }) {
   return (
-    <ScrollView style={editStyles.scrollV} nestedScrollEnabled>
+    <ScrollView style={scrollStyle ?? editStyles.scrollV} nestedScrollEnabled>
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         <View style={codeTableStyles.table}>
           {rows.map((row) => (

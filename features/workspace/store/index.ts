@@ -2,9 +2,9 @@ import { create } from 'zustand';
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import type { Workspace } from '../types';
-import type { Workspace as ApiWorkspace } from '@/features/api/generated/types.gen';
-import { list2 as list, create as apiCreate, delete2 as apiDelete } from '@/features/api/generated/sdk.gen';
-import { unwrapApiData } from '@/features/api/unwrap';
+import type { Workspace as ApiWorkspace } from '@pi-ui/client';
+import { sdk, unwrapApiData } from '@pi-ui/client';
+const { list2: list, create: apiCreate, delete2: apiDelete } = sdk;
 import { WorkspaceColors } from '@/constants/theme';
 
 const SELECTED_WORKSPACE_KEY = 'selected_workspace_id';

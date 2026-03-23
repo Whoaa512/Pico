@@ -19,7 +19,7 @@ import { PromptInput } from '@/features/workspace/components/prompt-input';
 import { ExtensionUiDialog } from '@/features/agent/components/extension-ui-dialog';
 import { useAgentSession, useConnection } from '@pi-ui/client';
 import { useChatStore } from '@/features/chat/store';
-import { useChatSessions } from '@/features/chat/hooks/use-chat-sessions';
+import { useChatSessions } from '@pi-ui/client';
 import { useWorkspaceStore } from '@/features/workspace/store';
 import type { PendingExtensionUiRequest as LegacyPendingUiRequest } from '@/features/agent/extension-ui';
 

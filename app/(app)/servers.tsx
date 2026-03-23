@@ -623,7 +623,7 @@ export default function ServersScreen() {
     const { workspaces, selectedWorkspaceId } = useWorkspaceStore.getState();
     const targetId = selectedWorkspaceId ?? workspaces[0]?.id;
     if (targetId) {
-      router.replace(`/workspace/${targetId}`);
+      router.replace('/');
     } else {
       setNewWsVisible(true);
     }
@@ -648,16 +648,7 @@ export default function ServersScreen() {
       }
 
       if (connected) {
-        const ws = useWorkspaceStore.getState();
-        await ws.switchServer(server.id);
-        await ws.fetchWorkspaces(server.id);
-        const { workspaces, selectedWorkspaceId } = useWorkspaceStore.getState();
-        const targetId = selectedWorkspaceId ?? workspaces[0]?.id;
-        if (targetId) {
-          router.replace(`/workspace/${targetId}`);
-        } else {
-          setNewWsVisible(true);
-        }
+        router.replace('/');
       } else {
         // No valid token and no credentials — prompt to edit/re-enter credentials
         setConnecting(null);
@@ -703,12 +694,7 @@ export default function ServersScreen() {
 
   const handleNewWsClose = useCallback(() => {
     setNewWsVisible(false);
-    // After creating a workspace, navigate to it
-    const { workspaces, selectedWorkspaceId } = useWorkspaceStore.getState();
-    const targetId = selectedWorkspaceId ?? workspaces[0]?.id;
-    if (targetId) {
-      router.replace(`/workspace/${targetId}`);
-    }
+    router.replace('/');
   }, [router]);
 
   const formModal = (

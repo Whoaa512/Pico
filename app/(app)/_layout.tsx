@@ -68,6 +68,8 @@ export default function AppLayout() {
       return;
     }
 
+    setStatus('loading');
+
     let cancelled = false;
     switchServer(candidate.id).then(() =>
       activateServer(candidate).then((valid) => {

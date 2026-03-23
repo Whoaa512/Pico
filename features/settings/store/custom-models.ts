@@ -1,14 +1,11 @@
 import { create } from 'zustand';
-import {
-  getCustomModels,
-  saveCustomModels,
-} from '@/features/api/generated/sdk.gen';
-import { unwrapApiData } from '@/features/api/unwrap';
+import { sdk, unwrapApiData } from '@pi-ui/client';
 import type {
   CustomProvider,
   CustomModelEntry,
   CustomModelsConfig,
-} from '@/features/api/generated/types.gen';
+} from '@pi-ui/client';
+const { getCustomModels, saveCustomModels } = sdk;
 
 export type { CustomProvider, CustomModelEntry };
 

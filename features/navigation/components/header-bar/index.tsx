@@ -28,9 +28,9 @@ import { useServersStore, type Server } from "@/features/servers/store";
 import { useAuthStore } from "@/features/auth/store";
 import { useWorkspaceStore } from "@/features/workspace/store";
 import { useAppMode } from "@/hooks/use-app-mode";
-import { useGitStatus, useNestedRepos } from "@/features/workspace/hooks/use-git-status";
+import { useGitStatus, useNestedRepos } from "@pi-ui/client";
 import { remotesToLinks, type RemoteLink } from "@/features/workspace/utils/git-remote-url";
-import { TasksButton } from "@/features/tasks/components/tasks-panel";
+import { TaskSelector } from "@/features/tasks/components/task-selector";
 
 function RepoIcon({ host, size, color }: { host: string; size: number; color: string }) {
   if (host === "github") return <Github size={size} color={color} strokeWidth={1.8} />;
@@ -70,7 +70,7 @@ export function HeaderBar({
   );
   const cwd = isCodeMode ? (workspace?.path ?? null) : null;
   const { data: gitData } = useGitStatus(cwd);
-  const { data: nestedRepos } = useNestedRepos(cwd);
+  const { repos: nestedRepos } = useNestedRepos(cwd);
   const [repoMenuVisible, setRepoMenuVisible] = useState(false);
 
   // Collect all remote links: root repo + nested repos
@@ -376,7 +376,7 @@ export function HeaderBar({
             )}
           </View>
         )}
-        {isCodeMode && <TasksButton />}
+        {isCodeMode && <TaskSelector />}
         <Pressable
           onPress={() => setPaletteVisible(true)}
           style={({ pressed }) => [

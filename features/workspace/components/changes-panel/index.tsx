@@ -13,7 +13,7 @@ import {
   useGitStatus,
   useGitLog,
   useFileDiff,
-} from "@/features/workspace/hooks/use-git-status";
+} from "@pi-ui/client";
 import { FileTree } from "../file-tree";
 
 import type { Tab } from "./constants";
@@ -66,7 +66,7 @@ export function ChangesPanel() {
     refresh,
   } = useGitStatus(cwd);
 
-  const { data: logEntries, isLoading: logLoading } = useGitLog(
+  const { entries: logEntries, isLoading: logLoading } = useGitLog(
     isGitRepo && activeTab === "history" ? cwd : null,
   );
 

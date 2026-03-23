@@ -6,7 +6,7 @@ import { Colors, Fonts } from "@/constants/theme";
 import { AnthaathiLogo } from "@/components/anthaathi-logo";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useWorkspaceStore } from "@/features/workspace/store";
-import { useGitStatus } from "@/features/workspace/hooks/use-git-status";
+import { useGitStatus } from "@pi-ui/client";
 
 const GREETINGS = [
   "What are we building?",

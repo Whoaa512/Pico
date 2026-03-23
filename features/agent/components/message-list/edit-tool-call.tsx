@@ -18,6 +18,7 @@ import {
   simpleDiff,
 } from "./code-preview";
 import { DiffBottomSheet } from "./diff-bottom-sheet";
+import { useDiffPanel, useAutoOpenDiffTab, type DiffTab } from "../diff-panel/context";
 
 export function EditToolCall({ tc }: { tc: ToolCallInfo }) {
   const colorScheme = useColorScheme() ?? "light";
@@ -26,7 +27,6 @@ export function EditToolCall({ tc }: { tc: ToolCallInfo }) {
   const isRunning = isToolCallActive(tc);
   const isVisible = useIsMessageVisible();
   const statusLabel = getToolStatusLabel(tc);
-  const [expanded, setExpanded] = useState(isWideScreen && isRunning);
   const [sheetOpen, setSheetOpen] = useState(false);
   const diffViewMode = useAppSettingsStore((s) => s.diffViewMode);
   const updateSettings = useAppSettingsStore((s) => s.update);
@@ -34,9 +34,8 @@ export function EditToolCall({ tc }: { tc: ToolCallInfo }) {
   const setViewMode = (mode: DiffViewMode) => updateSettings({ diffViewMode: mode });
   const [containerWidth, setContainerWidth] = useState(0);
 
-  useEffect(() => {
-    if (isRunning && isWideScreen) setExpanded(true);
-  }, [isRunning, isWideScreen]);
+  const diffPanel = useDiffPanel();
+  const hasDiffPanel = diffPanel !== null && diffPanel.selectTab !== undefined;
 
   const parsed = parseToolArguments(tc.arguments);
   const path = parsed.path ?? "";
@@ -46,26 +45,42 @@ export function EditToolCall({ tc }: { tc: ToolCallInfo }) {
   const fileName = basename(path);
   const addedCount = countLines(newText);
   const removedCount = countLines(oldText);
+
+  const tab: DiffTab | null = useMemo(() => {
+    if (!tc.id || !path) return null;
+    return { id: tc.id, toolName: "edit" as const, path, fileName };
+  }, [tc.id, path, fileName]);
+
+  const usesSidebar = isWideScreen && hasDiffPanel;
+  const isActiveInSidebar = usesSidebar && (diffPanel.activeTabId === tc.id || diffPanel.activeTabId === tab?.id);
+
+  useAutoOpenDiffTab(usesSidebar ? tab : null, isRunning, isWideScreen);
+
+  const [expanded, setExpanded] = useState(!usesSidebar && isWideScreen && isRunning);
+
+  useEffect(() => {
+    if (!usesSidebar && isRunning && isWideScreen) setExpanded(true);
+  }, [usesSidebar, isRunning, isWideScreen]);
+
   const textColor = isDark ? "#CCCCCC" : "#1A1A1A";
   const mutedColor = isDark ? "#888" : "#888";
   const addColor = isDark ? "#3FB950" : "#1A7F37";
   const removeColor = isDark ? "#F85149" : "#CF222E";
 
-  // Edit tool uses search/replace — simpleDiff is cheap, always compute.
   const ops = useMemo(() => {
     if (!oldText && !newText) return [];
     return simpleDiff(oldText, newText);
   }, [oldText, newText]);
 
   const sideBySideRows = useMemo(() => {
-    if (viewMode !== "split") return [];
+    if (usesSidebar || viewMode !== "split") return [];
     return buildSideBySide(ops);
-  }, [viewMode, ops]);
+  }, [usesSidebar, viewMode, ops]);
 
   const inlineRows = useMemo(() => {
-    if (viewMode !== "inline") return [];
+    if (usesSidebar || viewMode !== "inline") return [];
     return buildInline(ops);
-  }, [expanded, viewMode, ops]);
+  }, [usesSidebar, viewMode, ops]);
 
   const addBg = isDark ? "rgba(63, 185, 80, 0.10)" : "rgba(26, 127, 55, 0.06)";
   const removeBg = isDark ? "rgba(248, 81, 73, 0.10)" : "rgba(207, 34, 46, 0.06)";
@@ -79,17 +94,23 @@ export function EditToolCall({ tc }: { tc: ToolCallInfo }) {
   const toolbarBorder = isDark ? "#2A2A2A" : "#E0E0E0";
   const activeBtnBg = isDark ? "#2A2A2A" : "#FFFFFF";
   const hasData = ops.length > 0;
+  const activeIndicatorColor = isDark ? "#3B82F6" : "#2563EB";
 
   return (
     <View>
       <Pressable style={styles.row} onPress={() => {
         if (!isWideScreen) {
           setSheetOpen(true);
+        } else if (usesSidebar && tab) {
+          diffPanel.selectTab(tab);
         } else {
           animateLayout();
           setExpanded((v) => !v);
         }
       }}>
+        {isActiveInSidebar && (
+          <View style={{ width: 3, height: 14, borderRadius: 1.5, backgroundColor: activeIndicatorColor, marginRight: 4 }} />
+        )}
         <Text style={styles.singleLine} numberOfLines={1}>
           <Text style={[styles.verb, { color: textColor }]}>Edit</Text>
           <Text style={[styles.detail, { color: mutedColor }]}> {fileName}</Text>
@@ -99,13 +120,12 @@ export function EditToolCall({ tc }: { tc: ToolCallInfo }) {
             <Text style={[styles.status, { color: mutedColor }]}> {statusLabel}</Text>
           ) : null}
         </Text>
-        {!isWideScreen ? null : expanded
+        {usesSidebar ? null : !isWideScreen ? null : expanded
           ? <ChevronDown size={13} color={mutedColor} strokeWidth={1.8} />
           : <ChevronRight size={13} color={mutedColor} strokeWidth={1.8} />
         }
       </Pressable>
 
-      {/* Mobile: bottom sheet */}
       {!isWideScreen && sheetOpen && (
         <DiffBottomSheet
           visible
@@ -116,8 +136,7 @@ export function EditToolCall({ tc }: { tc: ToolCallInfo }) {
         />
       )}
 
-      {/* Desktop: inline */}
-      {isWideScreen && expanded && isVisible && (hasData || isRunning) && (
+      {!usesSidebar && isWideScreen && expanded && isVisible && (hasData || isRunning) && (
         <View
           style={[editStyles.box, { backgroundColor: boxBg, borderColor: boxBorder }]}
           onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}

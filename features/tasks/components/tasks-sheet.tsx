@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Platform, Pressable, StyleSheet, View } from 'react-native';
+import { useCallback, useEffect } from 'react';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   Easing,
@@ -9,53 +9,28 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { usePathname, useRouter } from 'expo-router';
 
-import { Colors } from '@/constants/theme';
+import { Colors, Fonts } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { usePiClient } from '@pi-ui/client';
-import { useWorkspaceStore } from '@/features/workspace/store';
-import { useWorkspaceSessions as useSessions } from '@pi-ui/client';
-import { requestBrowserNotificationPermission } from '@/features/agent/browser-notifications';
-import { SessionSheetContent } from '../session-sheet-content';
+import { TasksPanelContent } from './tasks-panel-content';
 
-const SHEET_HEIGHT = 420;
+const SHEET_HEIGHT = 480;
 const TIMING_CONFIG = { duration: 280, easing: Easing.out(Easing.cubic) };
 
-interface MobileSessionsSheetProps {
+interface TasksSheetProps {
   visible: boolean;
   onClose: () => void;
 }
 
-export function MobileSessionsSheet({ visible, onClose }: MobileSessionsSheetProps) {
+export function TasksSheet({ visible, onClose }: TasksSheetProps) {
   const insets = useSafeAreaInsets();
-  const pathname = usePathname();
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
   const isDark = colorScheme === 'dark';
+  const textPrimary = isDark ? '#fefdfd' : '#1a1a1a';
 
   const translateY = useSharedValue(SHEET_HEIGHT);
   const overlayOpacity = useSharedValue(0);
-
-  const router = useRouter();
-  const piClient = usePiClient();
-  const [createPending, setCreatePending] = useState(false);
-  const selectedWorkspaceId = useWorkspaceStore((s) => s.selectedWorkspaceId);
-  const workspace = useWorkspaceStore((s) =>
-    s.workspaces.find((w) => w.id === s.selectedWorkspaceId),
-  );
-
-  const {
-    sessions,
-    isLoading,
-    isFetchingNextPage,
-    hasNextPage,
-    fetchNextPage,
-    refetch,
-    isRefetching,
-  } = useSessions(selectedWorkspaceId);
-
-  const selectedSessionId = pathname.match(/\/workspace\/[^/]+\/s\/([^/]+)/)?.[1] ?? null;
 
   useEffect(() => {
     if (visible) {
@@ -74,23 +49,11 @@ export function MobileSessionsSheet({ visible, onClose }: MobileSessionsSheetPro
     });
   }, [translateY, overlayOpacity, onClose]);
 
-  const handleNewSession = useCallback(async () => {
-    if (!selectedWorkspaceId || createPending) return;
-    setCreatePending(true);
-    requestBrowserNotificationPermission();
-    try {
-      const info = await piClient.createAgentSession({ workspaceId: selectedWorkspaceId });
-      router.navigate(`/workspace/${selectedWorkspaceId}/s/${info.session_id}`);
-      dismiss();
-    } catch {
-    } finally {
-      setCreatePending(false);
-    }
-  }, [selectedWorkspaceId, createPending, piClient, router, dismiss]);
-
   const panGesture = Gesture.Pan()
     .onUpdate((e) => {
-      if (e.translationY > 0) translateY.value = e.translationY;
+      if (e.translationY > 0) {
+        translateY.value = e.translationY;
+      }
     })
     .onEnd((e) => {
       if (e.translationY > 100 || e.velocityY > 500) {
@@ -106,7 +69,8 @@ export function MobileSessionsSheet({ visible, onClose }: MobileSessionsSheetPro
 
   const overlayStyle = useAnimatedStyle(() => ({
     opacity: overlayOpacity.value,
-    pointerEvents: overlayOpacity.value > 0 ? ('auto' as const) : ('none' as const),
+    pointerEvents:
+      overlayOpacity.value > 0 ? ('auto' as const) : ('none' as const),
   }));
 
   return (
@@ -119,7 +83,9 @@ export function MobileSessionsSheet({ visible, onClose }: MobileSessionsSheetPro
         Platform.OS === 'web' && ({ pointerEvents: visible ? 'auto' : 'none' } as any),
       ]}
     >
-      <Animated.View style={[styles.overlay, { backgroundColor: colors.overlay }, overlayStyle]}>
+      <Animated.View
+        style={[styles.overlay, { backgroundColor: colors.overlay }, overlayStyle]}
+      >
         <Pressable style={StyleSheet.absoluteFill} onPress={dismiss} />
       </Animated.View>
 
@@ -128,7 +94,7 @@ export function MobileSessionsSheet({ visible, onClose }: MobileSessionsSheetPro
           styles.sheet,
           {
             backgroundColor: isDark ? '#1e1e1e' : '#FFFFFF',
-            paddingBottom: insets.bottom + 16,
+            paddingBottom: insets.bottom,
           },
           sheetStyle,
         ]}
@@ -139,29 +105,11 @@ export function MobileSessionsSheet({ visible, onClose }: MobileSessionsSheetPro
           </View>
         </GestureDetector>
 
-        <SessionSheetContent
-          title="Sessions"
-          subtitle={workspace?.title.toLowerCase().replace(/\s+/g, '-')}
-          sessions={sessions}
-          selectedSessionId={selectedSessionId}
-          isLoading={isLoading}
-          isRefetching={isRefetching}
-          hasNextPage={hasNextPage ?? false}
-          isFetchingNextPage={isFetchingNextPage}
-          createPending={createPending}
-          newButtonLabel="New session"
-          emptyLabel="No sessions yet"
-          isDark={isDark}
-          onNew={handleNewSession}
-          onSelect={(id) => {
-            if (selectedWorkspaceId) {
-              router.navigate(`/workspace/${selectedWorkspaceId}/s/${id}`);
-            }
-            dismiss();
-          }}
-          onRefresh={() => refetch()}
-          onLoadMore={() => fetchNextPage()}
-        />
+        <Text style={[styles.title, { color: textPrimary }]}>Tasks</Text>
+
+        <View style={styles.content}>
+          <TasksPanelContent />
+        </View>
       </Animated.View>
     </View>
   );
@@ -183,15 +131,27 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 14,
     borderTopRightRadius: 14,
     maxHeight: SHEET_HEIGHT,
+    height: SHEET_HEIGHT,
   },
   handleBar: {
     alignItems: 'center',
     paddingTop: 10,
-    paddingBottom: 10,
+    paddingBottom: 6,
   },
   handle: {
     width: 36,
     height: 4,
     borderRadius: 2,
+  },
+  title: {
+    fontSize: 15,
+    fontFamily: Fonts.sansSemiBold,
+    fontWeight: '600',
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+  },
+  content: {
+    flex: 1,
+    overflow: 'hidden',
   },
 });

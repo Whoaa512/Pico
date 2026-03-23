@@ -13,7 +13,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "api:generate": "openapi-ts -i http://127.0.0.1:5454/api-docs/openapi.json -o ./features/api/generated -c @hey-api/client-fetch",
+    "api:generate": "cd packages/pi-client && yarn api:generate",
     "web:build": "npx expo export --platform web --clear",
     "backend:build": "cd backend && cargo build --release",
     "build:prod": "yarn web:build && yarn backend:build"
@@ -70,8 +70,8 @@
     "zustand": "^5.0.12"
   },
   "devDependencies": {
-    "@hey-api/openapi-ts": "^0.94.2",
     "@types/react": "~19.1.0",
+    "@types/react-dom": "^19.2.3",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~10.0.0",
     "typescript": "~5.9.2"

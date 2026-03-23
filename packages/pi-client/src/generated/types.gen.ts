@@ -250,6 +250,11 @@ export type GitPathsRequest = {
     paths: Array<string>;
 };
 
+export type GitRemote = {
+    name: string;
+    url: string;
+};
+
 export type GitStashApplyRequest = {
     index?: number | null;
     pop?: boolean | null;
@@ -265,6 +270,8 @@ export type GitStatusResponse = {
     behind: number;
     branch: string;
     is_clean: boolean;
+    remote_url?: string | null;
+    remotes?: Array<GitRemote>;
     staged: Array<GitFileEntry>;
     unstaged: Array<GitFileEntry>;
     untracked: Array<string>;
@@ -305,6 +312,19 @@ export type LoginRequest = {
 
 export type LogoutRequest = {
     refresh_token?: string | null;
+};
+
+export type NestedGitRepo = {
+    branch: string;
+    /**
+     * Relative path from the workspace root
+     */
+    path: string;
+    remotes: Array<GitRemote>;
+};
+
+export type NestedGitReposResponse = {
+    repos: Array<NestedGitRepo>;
 };
 
 export type OperationLog = {
@@ -414,6 +434,14 @@ export type SessionTreeNode = {
     timestamp: string;
 };
 
+/**
+ * Request to start a task
+ */
+export type StartTaskRequest = {
+    label: string;
+    workspace_id: string;
+};
+
 export type StreamEvent = {
     data: unknown;
     id: number;
@@ -421,6 +449,75 @@ export type StreamEvent = {
     timestamp: number;
     type: string;
     workspace_id: string;
+};
+
+/**
+ * Request to stop/restart a task
+ */
+export type TaskActionRequest = {
+    task_id: string;
+};
+
+/**
+ * A single task definition – either from .pi/tasks.json or auto-detected
+ */
+export type TaskDefinition = {
+    auto_run?: boolean | null;
+    command: string;
+    cwd?: string | null;
+    env?: {
+        [key: string]: string;
+    } | null;
+    group?: string | null;
+    is_background?: boolean | null;
+    label: string;
+    /**
+     * Where this task was detected from: "npm", "make", "cargo", "docker-compose",
+     * "pip", "gradle", "pi" (from .pi/tasks.json), etc.
+     */
+    source?: string;
+    type?: string;
+};
+
+/**
+ * Runtime info about a task instance
+ */
+export type TaskInfo = {
+    command: string;
+    exit_code?: number | null;
+    id: string;
+    label: string;
+    /**
+     * Source of the task: "npm", "make", "cargo", "pi", etc.
+     */
+    source: string;
+    started_at: string;
+    status: TaskStatus;
+    stopped_at?: string | null;
+    workspace_id: string;
+};
+
+/**
+ * Task log output
+ */
+export type TaskLogs = {
+    id: string;
+    label: string;
+    lines: Array<string>;
+    total_lines: number;
+};
+
+/**
+ * Status of a running task
+ */
+export type TaskStatus = 'running' | 'stopped' | 'failed';
+
+/**
+ * Tasks configuration file format
+ */
+export type TasksConfig = {
+    tasks: Array<TaskDefinition>;
+    version?: string;
 };
 
 export type TouchAgentSessionRequest = {
@@ -1859,6 +1956,36 @@ export type LogResponses = {
 
 export type LogResponse = LogResponses[keyof LogResponses];
 
+export type NestedReposData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Working directory path
+         */
+        cwd: string;
+    };
+    url: '/api/git/repos';
+};
+
+export type NestedReposErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ErrorBody;
+};
+
+export type NestedReposError = NestedReposErrors[keyof NestedReposErrors];
+
+export type NestedReposResponses = {
+    /**
+     * Nested git repos
+     */
+    200: NestedGitReposResponse;
+};
+
+export type NestedReposResponse = NestedReposResponses[keyof NestedReposResponses];
+
 export type StageData = {
     body: GitPathsRequest;
     path?: never;
@@ -2297,6 +2424,221 @@ export type StreamResponses = {
      */
     200: unknown;
 };
+
+export type GetConfigData = {
+    body?: never;
+    path: {
+        /**
+         * Workspace ID
+         */
+        workspace_id: string;
+    };
+    query?: never;
+    url: '/api/tasks/config/{workspace_id}';
+};
+
+export type GetConfigErrors = {
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Workspace not found
+     */
+    404: ErrorBody;
+};
+
+export type GetConfigError = GetConfigErrors[keyof GetConfigErrors];
+
+export type GetConfigResponses = {
+    /**
+     * Tasks configuration
+     */
+    200: TasksConfig;
+};
+
+export type GetConfigResponse = GetConfigResponses[keyof GetConfigResponses];
+
+export type ListTasksData = {
+    body?: never;
+    path: {
+        /**
+         * Workspace ID
+         */
+        workspace_id: string;
+    };
+    query?: never;
+    url: '/api/tasks/list/{workspace_id}';
+};
+
+export type ListTasksErrors = {
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+};
+
+export type ListTasksResponses = {
+    /**
+     * Task instances
+     */
+    200: Array<TaskInfo>;
+};
+
+export type ListTasksResponse = ListTasksResponses[keyof ListTasksResponses];
+
+export type GetLogsData = {
+    body?: never;
+    path: {
+        /**
+         * Task instance ID
+         */
+        task_id: string;
+    };
+    query?: never;
+    url: '/api/tasks/logs/{task_id}';
+};
+
+export type GetLogsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Task not found
+     */
+    404: ErrorBody;
+};
+
+export type GetLogsError = GetLogsErrors[keyof GetLogsErrors];
+
+export type GetLogsResponses = {
+    /**
+     * Task logs
+     */
+    200: TaskLogs;
+};
+
+export type GetLogsResponse = GetLogsResponses[keyof GetLogsResponses];
+
+export type RemoveTaskData = {
+    body?: never;
+    path: {
+        /**
+         * Task instance ID
+         */
+        task_id: string;
+    };
+    query?: never;
+    url: '/api/tasks/remove/{task_id}';
+};
+
+export type RemoveTaskErrors = {
+    /**
+     * Bad request
+     */
+    400: ErrorBody;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+};
+
+export type RemoveTaskError = RemoveTaskErrors[keyof RemoveTaskErrors];
+
+export type RemoveTaskResponses = {
+    /**
+     * Task removed
+     */
+    200: unknown;
+};
+
+export type RestartTaskData = {
+    body: TaskActionRequest;
+    path?: never;
+    query?: never;
+    url: '/api/tasks/restart';
+};
+
+export type RestartTaskErrors = {
+    /**
+     * Bad request
+     */
+    400: ErrorBody;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+};
+
+export type RestartTaskError = RestartTaskErrors[keyof RestartTaskErrors];
+
+export type RestartTaskResponses = {
+    /**
+     * Task restarted
+     */
+    200: TaskInfo;
+};
+
+export type RestartTaskResponse = RestartTaskResponses[keyof RestartTaskResponses];
+
+export type StartTaskData = {
+    body: StartTaskRequest;
+    path?: never;
+    query?: never;
+    url: '/api/tasks/start';
+};
+
+export type StartTaskErrors = {
+    /**
+     * Bad request
+     */
+    400: ErrorBody;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+};
+
+export type StartTaskError = StartTaskErrors[keyof StartTaskErrors];
+
+export type StartTaskResponses = {
+    /**
+     * Task started
+     */
+    200: TaskInfo;
+};
+
+export type StartTaskResponse = StartTaskResponses[keyof StartTaskResponses];
+
+export type StopTaskData = {
+    body: TaskActionRequest;
+    path?: never;
+    query?: never;
+    url: '/api/tasks/stop';
+};
+
+export type StopTaskErrors = {
+    /**
+     * Bad request
+     */
+    400: ErrorBody;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+};
+
+export type StopTaskError = StopTaskErrors[keyof StopTaskErrors];
+
+export type StopTaskResponses = {
+    /**
+     * Task stopped
+     */
+    200: TaskInfo;
+};
+
+export type StopTaskResponse = StopTaskResponses[keyof StopTaskResponses];
 
 export type List2Data = {
     body?: never;

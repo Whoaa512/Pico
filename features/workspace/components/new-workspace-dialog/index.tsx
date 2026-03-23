@@ -21,9 +21,9 @@ import { Colors, Fonts, WorkspaceColors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useResponsiveLayout } from '@/features/navigation/hooks/use-responsive-layout';
 import { useWorkspaceStore } from '../../store';
-import { complete } from '@/features/api/generated/sdk.gen';
-import { unwrapApiData } from '@/features/api/unwrap';
-import type { PathCompletion } from '@/features/api/generated/types.gen';
+import { sdk, unwrapApiData } from '@pi-ui/client';
+import type { PathCompletion } from '@pi-ui/client';
+const { complete } = sdk;
 
 interface NewWorkspaceDialogProps {
   visible: boolean;

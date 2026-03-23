@@ -14,8 +14,8 @@ import { SquarePen, RefreshCw } from "lucide-react-native";
 import { Colors, Fonts } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useWorkspaceStore } from "@/features/workspace/store";
-import { useSessions } from "@/features/workspace/hooks/use-sessions";
-import type { SessionListItem } from "@/features/api/generated/types.gen";
+import { useWorkspaceSessions as useSessions } from '@pi-ui/client';
+import type { SessionListItem } from '@pi-ui/client';
 import { requestBrowserNotificationPermission } from "@/features/agent/browser-notifications";
 import { SessionActivityIndicator } from "@/features/workspace/components/session-activity-indicator";
 

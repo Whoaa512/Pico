@@ -12,19 +12,28 @@ function isApiEnvelope<T>(value: unknown): value is ApiEnvelope<T> {
   return typeof value === "object" && value !== null && "data" in value;
 }
 
-export function unwrapApiData<T>(value: T | ApiEnvelope<T> | null | undefined): T | undefined {
+export function unwrapApiData<T>(
+  value: T | ApiEnvelope<T> | null | undefined,
+): T | undefined {
   if (isApiEnvelope<T>(value)) {
     return value.data ?? undefined;
   }
   return value ?? undefined;
 }
 
-export function extractApiErrorMessage(value: unknown, fallback: string): string {
+export function extractApiErrorMessage(
+  value: unknown,
+  fallback: string,
+): string {
   if (typeof value === "string" && value.trim()) {
     return value.trim();
   }
 
-  if (isApiEnvelope<unknown>(value) && typeof value.error === "string" && value.error.trim()) {
+  if (
+    isApiEnvelope<unknown>(value) &&
+    typeof value.error === "string" &&
+    value.error.trim()
+  ) {
     return value.error.trim();
   }
 

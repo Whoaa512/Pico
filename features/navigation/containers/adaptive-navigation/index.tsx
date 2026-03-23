@@ -7,7 +7,6 @@ import {
 } from "react";
 import {
   Animated,
-  PanResponder,
   Platform,
   StyleSheet,
   View,
@@ -33,11 +32,11 @@ import { ChatSidebar } from "@/features/chat/components/chat-sidebar";
 import { ChatSheet } from "@/features/chat/components/chat-sheet";
 import { useChatStore } from "@/features/chat/store";
 import { ConnectionStatusBanner } from "@/features/agent/components/connection-status-banner";
-import { useTasksStore } from "@/features/tasks/store";
+import { TasksSheet } from "@/features/tasks/components/tasks-sheet";
+import { TaskOutputSheet } from "@/features/tasks/components/task-output-sheet";
+import { TaskOutputPanel } from "@/features/tasks/components/task-output-panel";
 
 const SIDEBAR_DEFAULT = 280;
-const SIDEBAR_MIN = 200;
-const SIDEBAR_MAX = 480;
 const RAIL_WIDTH = 64;
 
 type SidebarMode = "persistent" | "hover";
@@ -60,12 +59,12 @@ export function AdaptiveNavigation({ children }: AdaptiveNavigationProps) {
   const [sheetVisible, setSheetVisible] = useState(false);
   const [changesSheetVisible, setChangesSheetVisible] = useState(false);
   const [chatSheetVisible, setChatSheetVisible] = useState(false);
+  const [tasksSheetVisible, setTasksSheetVisible] = useState(false);
+  const [taskOutputSheetVisible, setTaskOutputSheetVisible] = useState(false);
   const [sidebarMode, setSidebarMode] = useState<SidebarMode>("persistent");
   const [hoverVisible, setHoverVisible] = useState(false);
   const [showPersistentSidebar, setShowPersistentSidebar] = useState(true);
-  const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT);
-  const [isResizing, setIsResizing] = useState(false);
-  const sidebarWidthRef = useRef(SIDEBAR_DEFAULT);
+  const [sidebarWidth] = useState(SIDEBAR_DEFAULT);
 
   const isDark = colorScheme === "dark";
   const contentBorder = isDark ? "#3b3a39" : "rgba(0,0,0,0.12)";
@@ -164,44 +163,6 @@ export function AdaptiveNavigation({ children }: AdaptiveNavigationProps) {
   const handleSidebarHoverOut = useCallback(() => {
     if (!isPersistent) setHoverVisible(false);
   }, [isPersistent]);
-
-  const startWidthRef = useRef(SIDEBAR_DEFAULT);
-  const resizePanResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: () => {
-        startWidthRef.current = sidebarWidthRef.current;
-        setIsResizing(true);
-        if (Platform.OS === "web") {
-          document.body.style.cursor = "col-resize";
-          document.body.style.userSelect = "none";
-        }
-      },
-      onPanResponderMove: (_e, gestureState) => {
-        const newWidth = Math.max(
-          SIDEBAR_MIN,
-          Math.min(SIDEBAR_MAX, startWidthRef.current + gestureState.dx),
-        );
-        sidebarWidthRef.current = newWidth;
-        setSidebarWidth(newWidth);
-      },
-      onPanResponderRelease: () => {
-        setIsResizing(false);
-        if (Platform.OS === "web") {
-          document.body.style.cursor = "";
-          document.body.style.userSelect = "";
-        }
-      },
-      onPanResponderTerminate: () => {
-        setIsResizing(false);
-        if (Platform.OS === "web") {
-          document.body.style.cursor = "";
-          document.body.style.userSelect = "";
-        }
-      },
-    }),
-  ).current;
 
   const router = useRouter();
   const chatSelectSession = useChatStore((s) => s.selectSession);
@@ -308,21 +269,9 @@ export function AdaptiveNavigation({ children }: AdaptiveNavigationProps) {
               }}
             >
               <View
-                style={{ width: sidebarWidth, flex: 1, flexDirection: "row" }}
+                style={{ width: sidebarWidth, flex: 1 }}
               >
-                <View style={{ flex: 1, height: "100%" }}>
-                  <SessionSidebar />
-                </View>
-                <View
-                  {...resizePanResponder.panHandlers}
-                  hitSlop={{ left: 8, right: 8 }}
-                  style={
-                    [
-                      styles.resizeHandle,
-                      isResizing && styles.resizeHandleActive,
-                    ] as any
-                  }
-                />
+                <SessionSidebar />
               </View>
             </Animated.View>
           )}
@@ -378,7 +327,11 @@ export function AdaptiveNavigation({ children }: AdaptiveNavigationProps) {
                   : {},
             ]}
           >
-            {children}
+            <View style={styles.contentInner}>
+              {children}
+            </View>
+
+            {isCodeMode && <TaskOutputPanel />}
 
             {showSessions && !isPersistent && isCodeMode && (
               <>
@@ -433,7 +386,8 @@ export function AdaptiveNavigation({ children }: AdaptiveNavigationProps) {
             onWorkspacePress={() => setSheetVisible(true)}
             onGitPress={() => setChangesSheetVisible(true)}
             onChatSessionsPress={() => setChatSheetVisible(true)}
-            onTasksPress={() => useTasksStore.getState().togglePanel()}
+            onTasksPress={() => setTasksSheetVisible(true)}
+            onTaskOutputPress={() => setTaskOutputSheetVisible(true)}
           />
         )}
         <View style={styles.mobileContent}>
@@ -453,6 +407,18 @@ export function AdaptiveNavigation({ children }: AdaptiveNavigationProps) {
               onClose={() => setChangesSheetVisible(false)}
             />
           )}
+        </>
+      )}
+      {isCodeMode && (
+        <>
+          <TasksSheet
+            visible={tasksSheetVisible}
+            onClose={() => setTasksSheetVisible(false)}
+          />
+          <TaskOutputSheet
+            visible={taskOutputSheetVisible}
+            onClose={() => setTaskOutputSheetVisible(false)}
+          />
         </>
       )}
       {isChatMode && (
@@ -487,6 +453,9 @@ const styles = StyleSheet.create({
     flex: 1,
     overflow: "hidden",
   },
+  contentInner: {
+    flex: 1,
+  },
   mobileContent: {
     flex: 1,
   },
@@ -502,19 +471,5 @@ const styles = StyleSheet.create({
     bottom: 0,
     width: SIDEBAR_DEFAULT,
     zIndex: 11,
-  },
-  resizeHandle: {
-    width: Platform.OS === "web" ? 4 : 12,
-    cursor: "col-resize" as any,
-    alignSelf: "stretch",
-    backgroundColor: "transparent",
-    marginRight: Platform.OS === "web" ? 0 : -6,
-    borderTopColor: "rgba(0,0,0,0.1)",
-    borderTopWidth: 0.633,
-  },
-  resizeHandleActive: {
-    backgroundColor: "rgba(0,0,0,0.1)",
-    width: 4,
-    marginRight: 0,
   },
 });

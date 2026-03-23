@@ -1,30 +1,35 @@
 import { create } from 'zustand';
-import { client } from '@/features/api/generated/client.gen';
-import { getActiveToken } from '@/features/api/client-auth';
-import type { TaskDefinition, TasksConfig, TaskInfo, TaskLogs } from '../types';
+import { sdk, unwrapApiData } from '@pi-ui/client';
+import type { TaskDefinition, TaskInfo } from '@pi-ui/client';
+const {
+  getConfig,
+  listTasks,
+  startTask: apiStartTask,
+  stopTask: apiStopTask,
+  restartTask: apiRestartTask,
+  getLogs,
+  removeTask: apiRemoveTask,
+} = sdk;
 
 interface TasksState {
-  /** Task definitions from .pi/tasks.json */
   definitions: TaskDefinition[];
-  /** Running/stopped task instances */
   instances: TaskInfo[];
-  /** Logs keyed by task instance id */
   logsById: Record<string, string[]>;
-  /** Whether the tasks panel is open */
   panelOpen: boolean;
-  /** Currently selected task id for log viewing */
   selectedTaskId: string | null;
-  /** Loading state */
+  selectedTaskLabel: string | null;
   loading: boolean;
-  /** Error message */
   error: string | null;
-  /** Has tasks config (workspace has .pi/tasks.json) */
   hasConfig: boolean;
+  outputPanelVisible: boolean;
+  outputPanelHeight: number;
 
-  // Actions
   setPanelOpen: (open: boolean) => void;
   togglePanel: () => void;
   setSelectedTaskId: (id: string | null) => void;
+  setSelectedTaskLabel: (label: string | null) => void;
+  setOutputPanelVisible: (visible: boolean) => void;
+  setOutputPanelHeight: (height: number) => void;
   fetchConfig: (workspaceId: string) => Promise<void>;
   fetchInstances: (workspaceId: string) => Promise<void>;
   fetchLogs: (taskId: string) => Promise<void>;
@@ -37,47 +42,7 @@ interface TasksState {
   addTaskInstance: (info: TaskInfo) => void;
 }
 
-function getBaseUrl(): string {
-  const config = client.getConfig();
-  return (config as any).baseUrl || 'http://127.0.0.1:5454';
-}
-
-function authHeaders(): Record<string, string> {
-  const token = getActiveToken();
-  return token ? { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' };
-}
-
-async function apiGet<T>(path: string): Promise<T | undefined> {
-  const res = await fetch(`${getBaseUrl()}/api${path}`, {
-    headers: authHeaders(),
-  });
-  const body = await res.json();
-  return body?.data ?? undefined;
-}
-
-async function apiPost<T>(path: string, data: unknown): Promise<T | undefined> {
-  const res = await fetch(`${getBaseUrl()}/api${path}`, {
-    method: 'POST',
-    headers: authHeaders(),
-    body: JSON.stringify(data),
-  });
-  const body = await res.json();
-  if (!body?.success) {
-    throw new Error(body?.error || 'Request failed');
-  }
-  return body?.data ?? undefined;
-}
-
-async function apiDelete(path: string): Promise<void> {
-  const res = await fetch(`${getBaseUrl()}/api${path}`, {
-    method: 'DELETE',
-    headers: authHeaders(),
-  });
-  const body = await res.json();
-  if (!body?.success) {
-    throw new Error(body?.error || 'Delete failed');
-  }
-}
+const DEFAULT_OUTPUT_HEIGHT = 200;
 
 export const useTasksStore = create<TasksState>((set, get) => ({
   definitions: [],
@@ -85,26 +50,38 @@ export const useTasksStore = create<TasksState>((set, get) => ({
   logsById: {},
   panelOpen: false,
   selectedTaskId: null,
+  selectedTaskLabel: null,
   loading: false,
   error: null,
   hasConfig: false,
+  outputPanelVisible: false,
+  outputPanelHeight: DEFAULT_OUTPUT_HEIGHT,
 
   setPanelOpen: (open) => set({ panelOpen: open }),
   togglePanel: () => set((s) => ({ panelOpen: !s.panelOpen })),
 
   setSelectedTaskId: (id) => set({ selectedTaskId: id }),
+  setSelectedTaskLabel: (label) => set({ selectedTaskLabel: label }),
+  setOutputPanelVisible: (visible) => set({ outputPanelVisible: visible }),
+  setOutputPanelHeight: (height) => set({ outputPanelHeight: Math.max(100, Math.min(500, height)) }),
 
   fetchConfig: async (workspaceId) => {
     try {
-      const config = await apiGet<TasksConfig>(`/tasks/config/${workspaceId}`);
+      const result = await getConfig({ path: { workspace_id: workspaceId } });
+      const config = unwrapApiData(result.data);
       if (config) {
+        const tasks = config.tasks;
+        const state = get();
+        const selectedLabel = state.selectedTaskLabel;
+        const hasSelected = selectedLabel && tasks.some((t) => t.label === selectedLabel);
         set({
-          definitions: config.tasks,
-          hasConfig: config.tasks.length > 0,
+          definitions: tasks,
+          hasConfig: tasks.length > 0,
           error: null,
+          selectedTaskLabel: hasSelected ? selectedLabel : (tasks[0]?.label ?? null),
         });
       } else {
-        set({ definitions: [], hasConfig: false });
+        set({ definitions: [], hasConfig: false, selectedTaskLabel: null });
       }
     } catch (e: any) {
       set({ definitions: [], hasConfig: false, error: e.message });
@@ -113,7 +90,8 @@ export const useTasksStore = create<TasksState>((set, get) => ({
 
   fetchInstances: async (workspaceId) => {
     try {
-      const instances = await apiGet<TaskInfo[]>(`/tasks/list/${workspaceId}`);
+      const result = await listTasks({ path: { workspace_id: workspaceId } });
+      const instances = unwrapApiData(result.data);
       if (instances) {
         set({ instances, error: null });
       }
@@ -124,7 +102,8 @@ export const useTasksStore = create<TasksState>((set, get) => ({
 
   fetchLogs: async (taskId) => {
     try {
-      const logs = await apiGet<TaskLogs>(`/tasks/logs/${taskId}`);
+      const result = await getLogs({ path: { task_id: taskId } });
+      const logs = unwrapApiData(result.data);
       if (logs) {
         set((s) => ({
           logsById: { ...s.logsById, [taskId]: logs.lines },
@@ -138,15 +117,17 @@ export const useTasksStore = create<TasksState>((set, get) => ({
   startTask: async (label, workspaceId) => {
     set({ loading: true, error: null });
     try {
-      const info = await apiPost<TaskInfo>('/tasks/start', {
-        label,
-        workspace_id: workspaceId,
+      const result = await apiStartTask({
+        body: { label, workspace_id: workspaceId },
       });
+      const info = unwrapApiData(result.data);
       if (info) {
         set((s) => ({
           instances: [...s.instances.filter((i) => i.id !== info.id), info],
           loading: false,
           selectedTaskId: info.id,
+          selectedTaskLabel: info.label,
+          outputPanelVisible: true,
         }));
       }
     } catch (e: any) {
@@ -157,7 +138,8 @@ export const useTasksStore = create<TasksState>((set, get) => ({
   stopTask: async (taskId) => {
     set({ loading: true, error: null });
     try {
-      const info = await apiPost<TaskInfo>('/tasks/stop', { task_id: taskId });
+      const result = await apiStopTask({ body: { task_id: taskId } });
+      const info = unwrapApiData(result.data);
       if (info) {
         set((s) => ({
           instances: s.instances.map((i) => (i.id === info.id ? info : i)),
@@ -172,7 +154,8 @@ export const useTasksStore = create<TasksState>((set, get) => ({
   restartTask: async (taskId) => {
     set({ loading: true, error: null });
     try {
-      const info = await apiPost<TaskInfo>('/tasks/restart', { task_id: taskId });
+      const result = await apiRestartTask({ body: { task_id: taskId } });
+      const info = unwrapApiData(result.data);
       if (info) {
         set((s) => ({
           instances: [
@@ -181,7 +164,9 @@ export const useTasksStore = create<TasksState>((set, get) => ({
           ],
           loading: false,
           selectedTaskId: info.id,
+          selectedTaskLabel: info.label,
           logsById: { ...s.logsById, [info.id]: [] },
+          outputPanelVisible: true,
         }));
       }
     } catch (e: any) {
@@ -191,7 +176,7 @@ export const useTasksStore = create<TasksState>((set, get) => ({
 
   removeTask: async (taskId) => {
     try {
-      await apiDelete(`/tasks/remove/${taskId}`);
+      await apiRemoveTask({ path: { task_id: taskId } });
       set((s) => ({
         instances: s.instances.filter((i) => i.id !== taskId),
         selectedTaskId: s.selectedTaskId === taskId ? null : s.selectedTaskId,
@@ -205,7 +190,6 @@ export const useTasksStore = create<TasksState>((set, get) => ({
     set((s) => {
       const existing = s.logsById[taskId] ?? [];
       const updated = [...existing, line];
-      // Keep max 5000 lines on client
       if (updated.length > 5000) {
         updated.splice(0, updated.length - 5000);
       }

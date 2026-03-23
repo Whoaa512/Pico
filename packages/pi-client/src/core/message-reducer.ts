@@ -186,7 +186,19 @@ export function reduceStreamEvent(state: SessionState, envelope: StreamEventEnve
             const toolCalls = [...(updated.toolCalls ?? [])];
             const last = toolCalls[toolCalls.length - 1];
             if (last) {
-              toolCalls[toolCalls.length - 1] = { ...last, arguments: last.arguments + delta.delta };
+              const nextArgs = last.arguments + delta.delta;
+              let inferredName = last.name;
+              if (!inferredName && nextArgs.length > 10) {
+                if (nextArgs.includes('"oldText"')) inferredName = "edit";
+                else if (nextArgs.includes('"content"')) inferredName = "write";
+                else if (nextArgs.includes('"command"')) inferredName = "bash";
+                else if (nextArgs.includes('"query"')) inferredName = "search";
+              }
+              toolCalls[toolCalls.length - 1] = {
+                ...last,
+                arguments: nextArgs,
+                ...(inferredName && inferredName !== last.name ? { name: inferredName } : {}),
+              };
               updated.toolCalls = toolCalls;
             }
             break;
@@ -195,6 +207,7 @@ export function reduceStreamEvent(state: SessionState, envelope: StreamEventEnve
             const toolCalls = [...(updated.toolCalls ?? [])];
             const last = toolCalls[toolCalls.length - 1];
             if (last && delta.toolCall) {
+              const prevId = last.id !== delta.toolCall.id ? last.id : undefined;
               toolCalls[toolCalls.length - 1] = {
                 ...last,
                 id: delta.toolCall.id,
@@ -203,6 +216,7 @@ export function reduceStreamEvent(state: SessionState, envelope: StreamEventEnve
                   ? delta.toolCall.arguments
                   : JSON.stringify(delta.toolCall.arguments),
                 status: "pending",
+                ...(prevId ? { previousId: prevId } : {}),
               };
               updated.toolCalls = toolCalls;
             }

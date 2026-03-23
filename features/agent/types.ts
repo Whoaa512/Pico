@@ -40,6 +40,7 @@ export interface ToolCallInfo {
   isError?: boolean;
   partialResult?: string;
   progress?: SubagentProgress;
+  previousId?: string;
 }
 
 export interface MessageUsageInfo {

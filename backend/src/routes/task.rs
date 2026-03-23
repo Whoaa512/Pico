@@ -58,12 +58,12 @@ pub async fn get_config(
 }
 
 // ---------------------------------------------------------------------------
-// GET /api/tasks/:workspace_id – list running/stopped tasks for a workspace
+// GET /api/tasks/list/:workspace_id – list running/stopped tasks for a workspace
 // ---------------------------------------------------------------------------
 
 #[utoipa::path(
     get,
-    path = "/api/tasks/{workspace_id}",
+    path = "/api/tasks/list/{workspace_id}",
     params(("workspace_id" = String, Path, description = "Workspace ID")),
     responses(
         (status = 200, description = "Task instances", body = Vec<TaskInfo>),
@@ -249,7 +249,7 @@ pub async fn restart_task(
 
 #[utoipa::path(
     get,
-    path = "/api/tasks/{task_id}/logs",
+    path = "/api/tasks/logs/{task_id}",
     params(("task_id" = String, Path, description = "Task instance ID")),
     responses(
         (status = 200, description = "Task logs", body = TaskLogs),
@@ -275,12 +275,12 @@ pub async fn get_logs(
 }
 
 // ---------------------------------------------------------------------------
-// DELETE /api/tasks/:task_id – remove a stopped task
+// DELETE /api/tasks/remove/:task_id – remove a stopped task
 // ---------------------------------------------------------------------------
 
 #[utoipa::path(
     delete,
-    path = "/api/tasks/{task_id}",
+    path = "/api/tasks/remove/{task_id}",
     params(("task_id" = String, Path, description = "Task instance ID")),
     responses(
         (status = 200, description = "Task removed"),

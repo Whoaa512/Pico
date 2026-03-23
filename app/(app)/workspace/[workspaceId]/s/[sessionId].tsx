@@ -19,10 +19,13 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 import { MessageList } from "@/features/agent/components/message-list";
 import { ChatShimmer } from "@/features/agent/components/message-list/chat-shimmer";
 import { ExtensionUiDialog } from "@/features/agent/components/extension-ui-dialog";
+import { DiffPanelProvider } from "@/features/agent/components/diff-panel/context";
+import { DiffSidebar } from "@/features/agent/components/diff-panel";
 import { useAgentSession, useConnection } from "@pi-ui/client";
-import { useSessions } from "@/features/workspace/hooks/use-sessions";
+import { useWorkspaceSessions as useSessions } from '@pi-ui/client';
 import { requestBrowserNotificationPermission } from "@/features/agent/browser-notifications";
 import type { PendingExtensionUiRequest as LegacyPendingUiRequest } from "@/features/agent/extension-ui";
+import type { ChatMessage } from "@/features/agent/types";
 
 export default function SessionScreen() {
   const { workspaceId, sessionId } = useLocalSearchParams<{
@@ -54,7 +57,7 @@ export default function SessionScreen() {
   }, [workspaceId, sessionId, setLastSession]);
 
   const { sessions } = useSessions(workspaceId ?? null);
-  const session = (sessions as Array<{ id: string; file_path: string }>)?.find(
+  const session = (sessions as { id: string; file_path: string }[])?.find(
     (s) => s.id === sessionId,
   );
   const sessionFile = session?.file_path || sessionId || "";
@@ -63,6 +66,8 @@ export default function SessionScreen() {
     workspaceId: workspaceId ?? "",
     sessionFile,
   });
+
+  const messages = agentSession.messages as ChatMessage[];
 
   const connection = useConnection();
   const inputBlockedByConnection =
@@ -145,66 +150,71 @@ export default function SessionScreen() {
     };
   }, [keyboardPadding, insets.bottom]);
 
-  const hasMessages = agentSession.messages.length > 0;
+  const hasMessages = messages.length > 0;
 
   return (
-    <Animated.View
-      style={[
-        styles.container,
-        {
-          backgroundColor: isDark ? "#121212" : colors.background,
-          paddingBottom: isWideScreen
-            ? 0
-            : Animated.add(keyboardPadding, insets.bottom),
-        },
-      ]}
-    >
-      <View style={styles.upperRow}>
-        <View style={[styles.editorColumn, { backgroundColor: editorBg }]}>
-          {hasMessages && sessionId ? (
-            <MessageList key={sessionId} sessionId={sessionId} />
-          ) : agentSession.isLoading || (!agentSession.isReady && sessionId) ? (
-            Platform.OS === "ios" ? (
-              <View style={styles.emptyCenter}>
-                <ActivityIndicator size="small" />
-              </View>
+    <DiffPanelProvider messages={messages}>
+      <Animated.View
+        style={[
+          styles.container,
+          {
+            backgroundColor: isDark ? "#121212" : colors.background,
+            paddingBottom: isWideScreen
+              ? 0
+              : Animated.add(keyboardPadding, insets.bottom),
+          },
+        ]}
+      >
+        <View style={styles.upperRow}>
+          <View style={[styles.editorColumn, { backgroundColor: editorBg }]}>
+            {hasMessages && sessionId ? (
+              <MessageList key={sessionId} sessionId={sessionId} />
+            ) : agentSession.isLoading || (!agentSession.isReady && sessionId) ? (
+              Platform.OS === "ios" ? (
+                <View style={styles.emptyCenter}>
+                  <ActivityIndicator size="small" />
+                </View>
+              ) : (
+                <ChatShimmer />
+              )
             ) : (
-              <ChatShimmer />
-            )
-          ) : (
-            <View style={styles.emptyCenter} />
-          )}
-          <ExtensionUiDialog
-            sessionId={sessionId}
-            request={agentSession.pendingExtensionUiRequest as LegacyPendingUiRequest | null}
-          />
-          <PromptInput
-            sessionId={sessionId}
-            onSend={handleSend}
-            isStreaming={agentSession.isStreaming}
-            onAbort={handleAbort}
-            sessionReady={agentSession.isReady}
-            disabled={
-              inputBlockedByConnection ||
-              !agentSession.isReady ||
-              !!agentSession.pendingExtensionUiRequest
-            }
-            allowTypingWhileDisabled={!inputBlockedByConnection}
-            stackedAbove={!!agentSession.pendingExtensionUiRequest}
-            errorMessage={alertMessage}
-            onClearError={clearAlert}
-          />
-        </View>
+              <View style={styles.emptyCenter} />
+            )}
+            <ExtensionUiDialog
+              sessionId={sessionId}
+              request={agentSession.pendingExtensionUiRequest as LegacyPendingUiRequest | null}
+            />
+            <PromptInput
+              sessionId={sessionId}
+              onSend={handleSend}
+              isStreaming={agentSession.isStreaming}
+              onAbort={handleAbort}
+              sessionReady={agentSession.isReady}
+              disabled={
+                inputBlockedByConnection ||
+                !agentSession.isReady ||
+                !!agentSession.pendingExtensionUiRequest
+              }
+              allowTypingWhileDisabled={!inputBlockedByConnection}
+              stackedAbove={!!agentSession.pendingExtensionUiRequest}
+              errorMessage={alertMessage}
+              onClearError={clearAlert}
+            />
+          </View>
 
-        {isWideScreen && (
-          <WorkspaceSidebar>
-            <View style={{ flex: 1, backgroundColor: editorBg }}>
-              <ChangesPanel />
-            </View>
-          </WorkspaceSidebar>
-        )}
-      </View>
-    </Animated.View>
+          {isWideScreen && (
+            <>
+              <DiffSidebar messages={messages} />
+              <WorkspaceSidebar>
+                <View style={{ flex: 1, backgroundColor: editorBg }}>
+                  <ChangesPanel />
+                </View>
+              </WorkspaceSidebar>
+            </>
+          )}
+        </View>
+      </Animated.View>
+    </DiffPanelProvider>
   );
 }
 

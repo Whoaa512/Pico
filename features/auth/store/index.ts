@@ -2,16 +2,16 @@ import { create } from 'zustand';
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 
-import { client } from '@/features/api/generated/client.gen';
-import type { AuthTokensResponse } from '@/features/api/generated';
-import {
+import { client, sdk } from '@pi-ui/client';
+import type { AuthTokensResponse } from '@pi-ui/client';
+const {
   checkSession,
-  login as apiLogin,
-  logout as apiLogout,
-  pair as apiPair,
-  refresh as apiRefresh,
-} from '@/features/api/generated/sdk.gen';
-import { unwrapApiData } from '@/features/api/unwrap';
+  login: apiLogin,
+  logout: apiLogout,
+  pair: apiPair,
+  refresh: apiRefresh,
+} = sdk;
+import { unwrapApiData } from '@pi-ui/client';
 import { useServersStore, type Server } from '@/features/servers/store';
 
 const TOKENS_KEY = 'auth_tokens';
@@ -528,9 +528,10 @@ function initializeClientAuth() {
   }
   clientAuthInitialized = true;
 
-  client.setConfig({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (client.setConfig as (cfg: Record<string, unknown>) => void)({
     auth: async () => currentConfiguredAccessToken(),
-    requestValidator: async (value) => {
+    requestValidator: async (value: unknown) => {
       const request = value as {
         method?: string;
         url?: string;

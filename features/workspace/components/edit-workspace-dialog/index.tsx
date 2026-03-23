@@ -19,7 +19,8 @@ import { Colors, Fonts } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useResponsiveLayout } from "@/features/navigation/hooks/use-responsive-layout";
 import { useWorkspaceStore } from "../../store";
-import { update2 } from "@/features/api/generated/sdk.gen";
+import { sdk } from '@pi-ui/client';
+const { update2 } = sdk;
 import type { Workspace } from "../../types";
 
 interface EditWorkspaceDialogProps {
