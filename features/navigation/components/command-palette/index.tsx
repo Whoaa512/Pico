@@ -12,13 +12,10 @@ import {
 } from 'react-native';
 import {
   Search,
-  FileText,
   FolderOpen,
   Settings,
   User,
-  GitBranch,
   Plus,
-  Layers,
 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 
@@ -137,31 +134,6 @@ export function CommandPalette({ visible, onClose }: CommandPaletteProps) {
         router.push('/profile');
         handleClose();
       },
-    },
-    // Tools
-    {
-      id: 'git',
-      label: 'Git Status',
-      description: 'View git changes and branches',
-      icon: GitBranch,
-      section: 'Tools',
-      onSelect: () => handleClose(),
-    },
-    {
-      id: 'sessions',
-      label: 'Sessions',
-      description: 'Browse all sessions',
-      icon: Layers,
-      section: 'Tools',
-      onSelect: () => handleClose(),
-    },
-    {
-      id: 'files',
-      label: 'Open File',
-      description: 'Browse and open project files',
-      icon: FileText,
-      section: 'Tools',
-      onSelect: () => handleClose(),
     },
   ];
 

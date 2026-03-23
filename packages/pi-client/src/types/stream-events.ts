@@ -280,6 +280,7 @@ export type AgentStreamEvent =
     }
   | ({ type: "extension_ui_request"; id: string } & ExtensionUiRequest)
   | ({ type: "agent_state" } & AgentStateData)
+  | { type: "session_state"; isStreaming?: boolean }
   | { type: "session_process_exited" }
   | { type: "session_idle_timeout" };
 

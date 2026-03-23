@@ -358,10 +358,12 @@ function AssistantMessageComponent({
   message,
   toolCalls: overrideToolCalls,
   animateOnMount: _animateOnMount = true,
+  hideActions = false,
 }: {
   message: ChatMessage;
   toolCalls?: ToolCallInfo[];
   animateOnMount?: boolean;
+  hideActions?: boolean;
 }) {
   const colorScheme = useColorScheme() ?? "light";
   const colors = Colors[colorScheme];
@@ -826,60 +828,62 @@ function AssistantMessageComponent({
           </View>
         )}
 
-        <Pressable
-          accessible={false}
-          onHoverIn={handleActionHoverIn}
-          onHoverOut={handleActionHoverOut}
-          style={[styles.messageMeta, actionVisibilityStyle]}
-        >
-          <View style={styles.actionRail}>
-            <Pressable
-              ref={infoButtonRef}
-              accessibilityRole="button"
-              accessibilityLabel="Show message info"
-              onPress={handleInfoPress}
-              onHoverIn={handleActionHoverIn}
-              onHoverOut={handleActionHoverOut}
-              style={({ pressed, hovered: buttonHovered }: any) => [
-                styles.actionButton,
-                {
-                  backgroundColor: isDark ? "#171717" : "#FFFFFF",
-                  borderColor: isDark ? "#2E2E2E" : "#E2E2E2",
-                },
-                (pressed || buttonHovered || infoOpen) && {
-                  backgroundColor: isDark ? "#202020" : "#F6F6F6",
-                },
-              ]}
-            >
-              <Info size={13} color={colors.textTertiary} strokeWidth={1.9} />
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={copied ? "Copied message" : "Copy message"}
-              disabled={!canCopy}
-              onPress={handleCopy}
-              onHoverIn={handleActionHoverIn}
-              onHoverOut={handleActionHoverOut}
-              style={({ pressed, hovered: buttonHovered }: any) => [
-                styles.actionButton,
-                {
-                  backgroundColor: isDark ? "#171717" : "#FFFFFF",
-                  borderColor: isDark ? "#2E2E2E" : "#E2E2E2",
-                  opacity: canCopy ? 1 : 0.45,
-                },
-                canCopy && (pressed || buttonHovered || copied) && {
-                  backgroundColor: isDark ? "#202020" : "#F6F6F6",
-                },
-              ]}
-            >
-              {copied ? (
-                <Check size={13} color={colors.textTertiary} strokeWidth={2.1} />
-              ) : (
-                <Copy size={13} color={colors.textTertiary} strokeWidth={1.9} />
-              )}
-            </Pressable>
-          </View>
-        </Pressable>
+        {!hideActions && (
+          <Pressable
+            accessible={false}
+            onHoverIn={handleActionHoverIn}
+            onHoverOut={handleActionHoverOut}
+            style={[styles.messageMeta, actionVisibilityStyle]}
+          >
+            <View style={styles.actionRail}>
+              <Pressable
+                ref={infoButtonRef}
+                accessibilityRole="button"
+                accessibilityLabel="Show message info"
+                onPress={handleInfoPress}
+                onHoverIn={handleActionHoverIn}
+                onHoverOut={handleActionHoverOut}
+                style={({ pressed, hovered: buttonHovered }: any) => [
+                  styles.actionButton,
+                  {
+                    backgroundColor: isDark ? "#171717" : "#FFFFFF",
+                    borderColor: isDark ? "#2E2E2E" : "#E2E2E2",
+                  },
+                  (pressed || buttonHovered || infoOpen) && {
+                    backgroundColor: isDark ? "#202020" : "#F6F6F6",
+                  },
+                ]}
+              >
+                <Info size={13} color={colors.textTertiary} strokeWidth={1.9} />
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={copied ? "Copied message" : "Copy message"}
+                disabled={!canCopy}
+                onPress={handleCopy}
+                onHoverIn={handleActionHoverIn}
+                onHoverOut={handleActionHoverOut}
+                style={({ pressed, hovered: buttonHovered }: any) => [
+                  styles.actionButton,
+                  {
+                    backgroundColor: isDark ? "#171717" : "#FFFFFF",
+                    borderColor: isDark ? "#2E2E2E" : "#E2E2E2",
+                    opacity: canCopy ? 1 : 0.45,
+                  },
+                  canCopy && (pressed || buttonHovered || copied) && {
+                    backgroundColor: isDark ? "#202020" : "#F6F6F6",
+                  },
+                ]}
+              >
+                {copied ? (
+                  <Check size={13} color={colors.textTertiary} strokeWidth={2.1} />
+                ) : (
+                  <Copy size={13} color={colors.textTertiary} strokeWidth={1.9} />
+                )}
+              </Pressable>
+            </View>
+          </Pressable>
+        )}
       </View>
       {Platform.OS === "web" && infoRows.length > 0 ? (
         <WebMessageInfoPopover
@@ -909,6 +913,7 @@ export const AssistantMessage = memo(
   AssistantMessageComponent,
   (prev, next) =>
     prev.message === next.message &&
+    prev.hideActions === next.hideActions &&
     areToolCallArraysEqual(prev.toolCalls, next.toolCalls),
 );
 

@@ -250,8 +250,14 @@ export function reduceStreamEvent(state: SessionState, envelope: StreamEventEnve
       const partial = event.partialResult
         ? extractTextFromContent(event.partialResult.content as unknown[])
         : undefined;
-      if (partial !== undefined) {
-        messages = updateToolCall(messages, event.toolCallId, (tc) => ({ ...tc, partialResult: partial }));
+      const details = (event.partialResult as any)?.details;
+      const progress = Array.isArray(details?.progress) ? details.progress[0] : undefined;
+      if (partial !== undefined || progress) {
+        messages = updateToolCall(messages, event.toolCallId, (tc) => ({
+          ...tc,
+          ...(partial !== undefined ? { partialResult: partial } : {}),
+          ...(progress ? { progress } : {}),
+        }));
       }
       break;
     }
@@ -273,6 +279,17 @@ export function reduceStreamEvent(state: SessionState, envelope: StreamEventEnve
     case "session_process_exited": {
       isStreaming = false;
       messages = updateLastStreaming(messages, (msg) => ({ ...msg, isStreaming: false }));
+      break;
+    }
+
+    case "session_state": {
+      const data = event as unknown as { isStreaming?: boolean };
+      if (typeof data.isStreaming === "boolean") {
+        isStreaming = data.isStreaming;
+        if (!isStreaming) {
+          messages = updateLastStreaming(messages, (msg) => ({ ...msg, isStreaming: false }));
+        }
+      }
       break;
     }
 

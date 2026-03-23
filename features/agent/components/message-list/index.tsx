@@ -58,6 +58,7 @@ interface VisibleMessageItem {
   turnSummary: string | null;
   modelLabel: string | null;
   animateOnMount: boolean;
+  isLastInTurn: boolean;
 }
 
 function formatDuration(ms: number): string {
@@ -213,7 +214,7 @@ function buildVisibleMessageItems(
   let previousUserIdx = -1;
   let previousAssistantModel: string | undefined;
 
-  return visible.map((item, visibleIndex) => {
+  const items = visible.map((item, visibleIndex) => {
     const { message, originalIndex, toolCalls } = item;
     const showTurnDivider = message.role === "user" && visibleIndex > 0;
     const turnSummary = showTurnDivider
@@ -239,8 +240,19 @@ function buildVisibleMessageItems(
       turnSummary,
       modelLabel,
       animateOnMount: hasHydrated && !seenMessageIds.has(message.id),
+      isLastInTurn: false,
     };
   });
+
+  for (let i = 0; i < items.length; i++) {
+    if (items[i].message.role !== "assistant") continue;
+    const next = items[i + 1];
+    if (!next || next.message.role === "user") {
+      items[i] = { ...items[i], isLastInTurn: true };
+    }
+  }
+
+  return items;
 }
 
 const TurnDivider = memo(function TurnDivider({
@@ -322,6 +334,7 @@ const MessageRow = memo(
             message={message}
             toolCalls={toolCalls}
             animateOnMount={animateOnMount}
+            hideActions={!item.isLastInTurn}
           />
         ) : (
           <SystemMessage message={message} />
@@ -351,7 +364,8 @@ const MessageRow = memo(
     prev.item.showTurnDivider === next.item.showTurnDivider &&
     prev.item.turnSummary === next.item.turnSummary &&
     prev.item.modelLabel === next.item.modelLabel &&
-    prev.item.animateOnMount === next.item.animateOnMount,
+    prev.item.animateOnMount === next.item.animateOnMount &&
+    prev.item.isLastInTurn === next.item.isLastInTurn,
 );
 
 const MessageListFooter = memo(function MessageListFooter({

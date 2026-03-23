@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
-  Bell,
   Check,
   ChevronDown,
   PanelLeft,
@@ -257,12 +256,6 @@ export function HeaderBar({
         >
           <Search size={16} color={textMuted} strokeWidth={1.8} />
         </Pressable>
-        <View>
-          <Pressable style={styles.headerBtn}>
-            <Bell size={16} color={textMuted} strokeWidth={1.8} />
-          </Pressable>
-          <View style={styles.greenDot} />
-        </View>
       </View>
     </View>
   );
@@ -397,13 +390,5 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 4,
   },
-  greenDot: {
-    position: "absolute",
-    top: 2,
-    right: 6,
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: "#089b00",
-  },
+
 });

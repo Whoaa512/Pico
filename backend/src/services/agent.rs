@@ -667,10 +667,20 @@ impl AgentManager {
         let event_counter = self.event_counter.clone();
 
         tokio::spawn(async move {
+            let mut is_streaming = false;
+
             while let Some(event) = event_rx.recv().await {
                 let is_exit = matches!(event, AgentStreamEvent::SessionProcessExited);
 
                 let current_session_id = session_id_ref.lock().unwrap().clone();
+
+                let next_streaming = match &event {
+                    AgentStreamEvent::AgentStart | AgentStreamEvent::TurnStart => true,
+                    AgentStreamEvent::AgentEnd { .. }
+                    | AgentStreamEvent::TurnEnd { .. }
+                    | AgentStreamEvent::SessionProcessExited => false,
+                    _ => is_streaming,
+                };
 
                 update_pending_extension_ui(&sessions, &current_session_id, &event).await;
 
@@ -695,6 +705,31 @@ impl AgentManager {
                 }
 
                 let _ = broadcast_tx.send(stream_event);
+
+                if next_streaming != is_streaming {
+                    is_streaming = next_streaming;
+                    let state_data = serde_json::json!({
+                        "type": "session_state",
+                        "isStreaming": is_streaming,
+                    });
+                    let state_evt_id = event_counter.fetch_add(1, Ordering::SeqCst);
+                    let state_event = StreamEvent {
+                        id: state_evt_id,
+                        session_id: current_session_id.clone(),
+                        workspace_id: workspace_id.clone(),
+                        event_type: "session_state".to_string(),
+                        data: state_data,
+                        timestamp: chrono::Utc::now().timestamp_millis(),
+                    };
+                    {
+                        let mut buf = event_buffer.lock().await;
+                        if buf.len() >= MAX_BUFFER_SIZE {
+                            buf.pop_front();
+                        }
+                        buf.push_back(state_event.clone());
+                    }
+                    let _ = broadcast_tx.send(state_event);
+                }
 
                 if is_exit {
                     let exit_session_id = session_id_ref.lock().unwrap().clone();

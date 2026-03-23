@@ -1,5 +1,20 @@
 import type { StopReason } from "./stream-events";
 
+export interface SubagentProgressStep {
+  tool: string;
+  args: string;
+  endMs?: number;
+}
+
+export interface SubagentProgress {
+  agent?: string;
+  status?: string;
+  durationMs?: number;
+  toolCount?: number;
+  recentTools?: SubagentProgressStep[];
+  recentOutput?: string[];
+}
+
 export interface ToolCallInfo {
   id: string;
   name: string;
@@ -8,6 +23,7 @@ export interface ToolCallInfo {
   result?: string;
   isError?: boolean;
   partialResult?: string;
+  progress?: SubagentProgress;
 }
 
 export interface MessageUsageInfo {
