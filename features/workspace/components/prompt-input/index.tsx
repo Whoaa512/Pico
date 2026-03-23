@@ -41,6 +41,7 @@ import { MobileEffortSheet } from "./mobile-effort-sheet";
 import { WaveformBars } from "./waveform-bars";
 import { ToolbarSkeleton } from "./toolbar-skeleton";
 import { ContextUsageRing } from "./context-usage-ring";
+import { useDraftStore } from "./draft-store";
 
 const EMPTY_SLASH_COMMANDS: SlashCommand[] = [];
 const BUILTIN_COMMANDS: SlashCommand[] = [
@@ -202,11 +203,21 @@ export function PromptInput({
     if (!speechLoaded) loadSpeechSettings();
   }, [speechLoaded, loadSpeechSettings]);
 
-  const [text, setText] = useState("");
+  const draftKey = sessionId ?? "__new__";
+  const text = useDraftStore((s) => s.getText(draftKey));
+  const attachments = useDraftStore((s) => s.getAttachments(draftKey));
+  const setText = useCallback((v: string) => useDraftStore.getState().setText(draftKey, v), [draftKey]);
+  const setAttachments = useCallback((v: Attachment[] | ((prev: Attachment[]) => Attachment[])) => {
+    const store = useDraftStore.getState();
+    if (typeof v === "function") {
+      store.setAttachments(draftKey, v(store.getAttachments(draftKey)));
+    } else {
+      store.setAttachments(draftKey, v);
+    }
+  }, [draftKey]);
   const [showCommands, setShowCommands] = useState(false);
   const [filteredCommands, setFilteredCommands] = useState<SlashCommand[]>([]);
   const [slashIndex, setSlashIndex] = useState(0);
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const trimmedText = text.trim();
   const hasDraft = trimmedText.length > 0 || attachments.length > 0;
@@ -216,13 +227,13 @@ export function PromptInput({
   const textBeforeSpeechRef = useRef("");
   const handleSpeechInterim = useCallback((interim: string) => {
     setText(textBeforeSpeechRef.current + (textBeforeSpeechRef.current ? " " : "") + interim);
-  }, []);
+  }, [setText]);
   const handleSpeechFinal = useCallback((final: string) => {
     const base = textBeforeSpeechRef.current;
     const newText = base + (base ? " " : "") + final;
     setText(newText);
     textBeforeSpeechRef.current = newText;
-  }, []);
+  }, [setText]);
   const {
     isListening, start: startListening, stop: stopListening,
     error: speechError, clearError: clearSpeechError, audioLevel,
@@ -281,11 +292,12 @@ export function PromptInput({
   }, [inputDisabled]);
 
   // --- Send / abort ---
+  const clearDraft = useDraftStore((s) => s.clearDraft);
   const sendDraft = useCallback(async (queueBehavior?: QueueBehavior) => {
     if (!hasDraft) return;
     const savedText = trimmedText;
     const savedAttachments = [...attachments];
-    setText(""); setAttachments([]); setShowCommands(false);
+    clearDraft(draftKey); setShowCommands(false);
     textBeforeSpeechRef.current = "";
     onClearError?.();
     try {
@@ -294,7 +306,7 @@ export function PromptInput({
       setText(savedText);
       setAttachments(savedAttachments);
     }
-  }, [attachments, hasDraft, onClearError, onSend, trimmedText]);
+  }, [attachments, clearDraft, draftKey, hasDraft, onClearError, onSend, setText, setAttachments, trimmedText]);
 
   const handleSubmit = useCallback(() => {
     if (sendDisabled) return;
@@ -315,7 +327,7 @@ export function PromptInput({
     } else {
       setShowCommands(false);
     }
-  }, [slashCommands]);
+  }, [setText, slashCommands]);
 
   const handleSelectCommand = useCallback((command: SlashCommand) => {
     const newText = text.replace(/(?:^|\s)\/([\w]*)$/, (match) => {
@@ -325,16 +337,19 @@ export function PromptInput({
     setText(newText);
     setShowCommands(false);
     inputRef.current?.focus();
-  }, [text]);
+  }, [setText, text]);
 
   // --- Attachments ---
+  const storeAddAttachment = useDraftStore((s) => s.addAttachment);
+  const storeRemoveAttachment = useDraftStore((s) => s.removeAttachment);
+
   const addAttachment = useCallback((att: Attachment) => {
-    setAttachments((prev) => [...prev, att]);
-  }, []);
+    storeAddAttachment(draftKey, att);
+  }, [draftKey, storeAddAttachment]);
 
   const removeAttachment = useCallback((id: string) => {
-    setAttachments((prev) => prev.filter((a) => a.id !== id));
-  }, []);
+    storeRemoveAttachment(draftKey, id);
+  }, [draftKey, storeRemoveAttachment]);
 
   const handleFilePick = useCallback(async () => {
     if (inputDisabled) return;
