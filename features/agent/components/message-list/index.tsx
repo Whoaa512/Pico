@@ -37,7 +37,7 @@ import type { ChatMessage, ToolCallInfo } from "../../types";
 import { AssistantMessage } from "./assistant-message";
 import { SystemMessage } from "./system-message";
 import { UserMessage } from "./user-message";
-import { VisibleMessagesContext } from "./visibility-context";
+import { VisibleMessagesContext, createVisibleMessageStore } from "./visibility-context";
 
 
 const BOTTOM_THRESHOLD = 300;
@@ -583,13 +583,14 @@ export function MessageList({ sessionId }: { sessionId: string }) {
   const sessionWorkspaceById = useWorkspaceStore((s) => s.sessionWorkspaceById);
 
   const listRef = useRef<FlatList<VisibleMessageItem>>(null);
+  const visibleMessageStoreRef = useRef(createVisibleMessageStore());
   const isNearBottomRef = useRef(true);
   const hasHydratedRef = useRef(false);
   const seenMessageIdsRef = useRef<Set<string>>(new Set());
   const showScrollButtonRef = useRef(false);
   const contentDirtyRef = useRef(false);
+  const scrollFrameRef = useRef<number | null>(null);
   const [showScrollButton, setShowScrollButton] = useState(false);
-  const [visibleMessageIds, setVisibleMessageIds] = useState<Set<string>>(EMPTY_SET);
 
   const handleViewableItemsChanged = useRef(
     ({ viewableItems }: { viewableItems: ViewToken[] }) => {
@@ -599,7 +600,7 @@ export function MessageList({ sessionId }: { sessionId: string }) {
           ids.add(token.item.message.id);
         }
       }
-      setVisibleMessageIds(ids);
+      visibleMessageStoreRef.current.setVisibleIds(ids);
     },
   ).current;
 
@@ -673,6 +674,18 @@ export function MessageList({ sessionId }: { sessionId: string }) {
     listRef.current?.scrollToOffset({ offset: 0, animated });
   }, []);
 
+  const scheduleScrollToLatest = useCallback(() => {
+    if (scrollFrameRef.current !== null) return;
+    if (typeof globalThis.requestAnimationFrame !== "function") {
+      listRef.current?.scrollToOffset({ offset: 0, animated: false });
+      return;
+    }
+    scrollFrameRef.current = globalThis.requestAnimationFrame(() => {
+      scrollFrameRef.current = null;
+      listRef.current?.scrollToOffset({ offset: 0, animated: false });
+    });
+  }, []);
+
   const visibleItems = useMemo(
     () =>
       buildVisibleMessageItems(
@@ -712,15 +725,24 @@ export function MessageList({ sessionId }: { sessionId: string }) {
     contentDirtyRef.current = false;
 
     setScrollButtonVisible(false);
-    listRef.current?.scrollToOffset({ offset: 0, animated: false });
-  }, [setScrollButtonVisible]);
+    scheduleScrollToLatest();
+  }, [scheduleScrollToLatest, setScrollButtonVisible]);
 
   useEffect(() => {
     hasHydratedRef.current = false;
     seenMessageIdsRef.current = new Set();
     isNearBottomRef.current = true;
     contentDirtyRef.current = false;
+    visibleMessageStoreRef.current.setVisibleIds(EMPTY_SET);
     setScrollButtonVisible(false);
+
+    if (
+      scrollFrameRef.current !== null &&
+      typeof globalThis.cancelAnimationFrame === "function"
+    ) {
+      globalThis.cancelAnimationFrame(scrollFrameRef.current);
+      scrollFrameRef.current = null;
+    }
 
     if (bannerTimerRef.current) {
       clearTimeout(bannerTimerRef.current);
@@ -749,6 +771,13 @@ export function MessageList({ sessionId }: { sessionId: string }) {
 
   useEffect(() => {
     return () => {
+      if (
+        scrollFrameRef.current !== null &&
+        typeof globalThis.cancelAnimationFrame === "function"
+      ) {
+        globalThis.cancelAnimationFrame(scrollFrameRef.current);
+        scrollFrameRef.current = null;
+      }
       if (bannerTimerRef.current) {
         clearTimeout(bannerTimerRef.current);
       }
@@ -803,7 +832,7 @@ export function MessageList({ sessionId }: { sessionId: string }) {
   }
 
   return (
-    <VisibleMessagesContext.Provider value={visibleMessageIds}>
+    <VisibleMessagesContext.Provider value={visibleMessageStoreRef.current}>
     <View style={styles.container}>
       <FlatList
         ref={listRef}

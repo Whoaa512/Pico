@@ -291,6 +291,25 @@ async fn auto_touch(
         .ok()
 }
 
+fn should_retry_after_auto_touch(
+    result: &(StatusCode, Json<ApiResponse<Value>>),
+) -> bool {
+    if result.0 == StatusCode::INTERNAL_SERVER_ERROR {
+        return true;
+    }
+
+    if result.0 != StatusCode::BAD_REQUEST {
+        return false;
+    }
+
+    let Some(error) = result.1.0.error.as_deref() else {
+        return false;
+    };
+    let normalized = error.to_ascii_lowercase();
+    normalized.contains("session invalid or expired")
+        || normalized.contains("session not found")
+}
+
 fn stream_event_json<T: serde::Serialize>(event: &T) -> String {
     serde_json::to_string(event).unwrap_or_default()
 }
@@ -1541,7 +1560,7 @@ pub async fn prompt(
     }
 
     let result = forward_command(&state, &req.session_id, cmd.clone()).await;
-    if result.0 == StatusCode::INTERNAL_SERVER_ERROR {
+    if should_retry_after_auto_touch(&result) {
         if let Some(info) = auto_touch(&state, &req.session_id, req.workspace_id.as_deref(), req.session_file.as_deref()).await {
             if let Err(err) = state.agent.emit_agent_state(&info.session_id).await {
                 tracing::warn!("Failed to emit agent_state after auto-touch: {err}");
@@ -1578,7 +1597,7 @@ pub async fn steer(
     }
 
     let result = forward_command(&state, &req.session_id, cmd.clone()).await;
-    if result.0 == StatusCode::INTERNAL_SERVER_ERROR {
+    if should_retry_after_auto_touch(&result) {
         if let Some(info) = auto_touch(&state, &req.session_id, req.workspace_id.as_deref(), req.session_file.as_deref()).await {
             if let Err(err) = state.agent.emit_agent_state(&info.session_id).await {
                 tracing::warn!("Failed to emit agent_state after auto-touch: {err}");
@@ -1615,7 +1634,7 @@ pub async fn follow_up(
     }
 
     let result = forward_command(&state, &req.session_id, cmd.clone()).await;
-    if result.0 == StatusCode::INTERNAL_SERVER_ERROR {
+    if should_retry_after_auto_touch(&result) {
         if let Some(info) = auto_touch(&state, &req.session_id, req.workspace_id.as_deref(), req.session_file.as_deref()).await {
             if let Err(err) = state.agent.emit_agent_state(&info.session_id).await {
                 tracing::warn!("Failed to emit agent_state after auto-touch: {err}");

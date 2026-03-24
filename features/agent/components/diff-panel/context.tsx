@@ -78,12 +78,15 @@ export function DiffPanelProvider({
     return null;
   }, [messages]);
 
-  if (latestUserMsg && latestUserMsg.id !== lastUserMsgIdRef.current) {
-    lastUserMsgIdRef.current = latestUserMsg.id;
-    if (state.userPinned) {
-      setState((prev) => ({ ...prev, userPinned: false }));
+  useEffect(() => {
+    if (!latestUserMsg || latestUserMsg.id === lastUserMsgIdRef.current) {
+      return;
     }
-  }
+    lastUserMsgIdRef.current = latestUserMsg.id;
+    setState((prev) => (
+      prev.userPinned ? { ...prev, userPinned: false } : prev
+    ));
+  }, [latestUserMsg]);
 
   const selectTab = useCallback((tab: DiffTab) => {
     setState((prev) => {

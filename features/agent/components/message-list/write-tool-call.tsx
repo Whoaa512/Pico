@@ -48,7 +48,11 @@ export function WriteToolCall({ tc }: { tc: ToolCallInfo }) {
     if (!usesSidebar && isRunning && isWideScreen) setExpanded(true);
   }, [usesSidebar, isRunning, isWideScreen]);
 
-  const previewRows = useMemo(() => buildCodeRows(newText, 1), [newText]);
+  const shouldRenderPreview = !usesSidebar && isWideScreen && expanded && isVisible;
+  const previewRows = useMemo(
+    () => (shouldRenderPreview ? buildCodeRows(newText, 1) : []),
+    [newText, shouldRenderPreview],
+  );
 
   const textColor = isDark ? "#CCCCCC" : "#1A1A1A";
   const mutedColor = isDark ? "#888" : "#888";
@@ -92,7 +96,7 @@ export function WriteToolCall({ tc }: { tc: ToolCallInfo }) {
         }
       </Pressable>
 
-      {!usesSidebar && isWideScreen && expanded && isVisible && (previewRows.length > 0 || isRunning) && (
+      {shouldRenderPreview && (previewRows.length > 0 || isRunning) && (
         <View style={[editStyles.box, { backgroundColor: boxBg, borderColor: boxBorder }]}>
           <View style={[editStyles.toolbar, { backgroundColor: toolbarBg, borderBottomColor: toolbarBorder }]}>
             <Text style={[editStyles.toolbarPath, { color: mutedColor }]} numberOfLines={1}>{path}</Text>

@@ -6,7 +6,7 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 import type { ToolCallInfo } from "../../types";
 import { getToolStatusLabel, isToolCallActive, parseToolArguments } from "./tool-call-utils";
 import { useIsMessageVisible } from "./visibility-context";
-import { animateLayout, basename, sharedStyles as styles } from "./tool-call-shared";
+import { animateLayout, basename, countLines, sharedStyles as styles } from "./tool-call-shared";
 import {
   CodePreview,
   buildCodeRows,
@@ -29,9 +29,10 @@ export function ReadToolCall({ tc }: { tc: ToolCallInfo }) {
   const output = tc.result ?? "";
   const parsedOutput = useMemo(() => parseReadOutput(output), [output]);
   const startLine = (parsed.offset ?? 0) + 1;
+  const shouldRenderPreview = expanded && isVisible;
   const rows = useMemo(
-    () => buildCodeRows(parsedOutput.body, startLine),
-    [parsedOutput.body, startLine],
+    () => (shouldRenderPreview ? buildCodeRows(parsedOutput.body, startLine) : []),
+    [parsedOutput.body, shouldRenderPreview, startLine],
   );
 
   const textColor = isDark ? "#CCCCCC" : "#1A1A1A";
@@ -44,8 +45,8 @@ export function ReadToolCall({ tc }: { tc: ToolCallInfo }) {
   const lineNoColor = isDark ? "#444" : "#BBBBBB";
 
   const lineRange =
-    rows.length > 0
-      ? `${rows[0]?.lineNo}-${rows[rows.length - 1]?.lineNo}`
+    parsedOutput.body.length > 0
+      ? `${startLine}-${startLine + countLines(parsedOutput.body) - 1}`
       : null;
 
   return (
@@ -67,7 +68,7 @@ export function ReadToolCall({ tc }: { tc: ToolCallInfo }) {
         }
       </Pressable>
 
-      {expanded && isVisible && (rows.length > 0 || isRunning || !!output) && (
+      {shouldRenderPreview && (rows.length > 0 || isRunning || !!output) && (
         <View style={[editStyles.box, { backgroundColor: boxBg, borderColor: boxBorder }]}>
           <View
             style={[editStyles.toolbar, { backgroundColor: toolbarBg, borderBottomColor: toolbarBorder }]}

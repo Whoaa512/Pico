@@ -1,4 +1,13 @@
-import { useMemo, useRef, useState, useEffect, type JSX } from "react";
+import {
+  startTransition,
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type JSX,
+} from "react";
 import { lexer, type Token } from "marked";
 import type { useMarkdownHookOptions } from "react-native-marked";
 import { Renderer } from "react-native-marked";
@@ -167,6 +176,16 @@ export function useStableMarkdown(
   const pendingRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const updateThrottledText = useCallback((nextText: string, urgent = false) => {
+    if (urgent) {
+      setThrottledText(nextText);
+      return;
+    }
+    startTransition(() => {
+      setThrottledText(nextText);
+    });
+  }, []);
+
   useEffect(() => {
     if (!isStreaming) {
       if (timerRef.current) {
@@ -174,7 +193,7 @@ export function useStableMarkdown(
         timerRef.current = null;
       }
       pendingRef.current = false;
-      setThrottledText(text);
+      updateThrottledText(text, true);
       return;
     }
 
@@ -183,17 +202,17 @@ export function useStableMarkdown(
       return;
     }
 
-    setThrottledText(text);
+    updateThrottledText(text);
 
     timerRef.current = setTimeout(function tick() {
       timerRef.current = null;
       if (pendingRef.current) {
         pendingRef.current = false;
-        setThrottledText(textRef.current);
+        updateThrottledText(textRef.current);
         timerRef.current = setTimeout(tick, STREAMING_THROTTLE_MS);
       }
     }, STREAMING_THROTTLE_MS);
-  }, [text, isStreaming]);
+  }, [text, isStreaming, updateThrottledText]);
 
   useEffect(() => {
     return () => {
@@ -208,18 +227,20 @@ export function useStableMarkdown(
     () => buildStyles(options.styles, options.colorScheme, options.theme),
     [options.styles, options.colorScheme, options.theme],
   );
+  const deferredText = useDeferredValue(throttledText);
+  const markdownSource = isStreaming ? deferredText : throttledText;
 
   const Parser = getParserClass();
 
   const elements = useMemo(() => {
     const renderer = new Renderer();
     const parser = new Parser({ styles, baseUrl: options.baseUrl, renderer });
-    const tokens = lexer(throttledText, {
+    const tokens = lexer(markdownSource, {
       gfm: true,
       tokenizer: options.tokenizer,
     });
     return parser.parse(tokens) as JSX.Element[];
-  }, [throttledText, styles, options.baseUrl, options.tokenizer, Parser]);
+  }, [markdownSource, styles, options.baseUrl, options.tokenizer, Parser]);
 
   return elements;
 }

@@ -61,25 +61,27 @@ export function EditToolCall({ tc }: { tc: ToolCallInfo }) {
     if (!usesSidebar && isRunning && isWideScreen) setExpanded(true);
   }, [usesSidebar, isRunning, isWideScreen]);
 
+  const shouldRenderPreview = !usesSidebar && isWideScreen && expanded && isVisible;
   const textColor = isDark ? "#CCCCCC" : "#1A1A1A";
   const mutedColor = isDark ? "#888" : "#888";
   const addColor = isDark ? "#3FB950" : "#1A7F37";
   const removeColor = isDark ? "#F85149" : "#CF222E";
 
   const ops = useMemo(() => {
+    if (!shouldRenderPreview) return [];
     if (!oldText && !newText) return [];
     return simpleDiff(oldText, newText);
-  }, [oldText, newText]);
+  }, [newText, oldText, shouldRenderPreview]);
 
   const sideBySideRows = useMemo(() => {
-    if (usesSidebar || viewMode !== "split") return [];
+    if (!shouldRenderPreview || viewMode !== "split") return [];
     return buildSideBySide(ops);
-  }, [usesSidebar, viewMode, ops]);
+  }, [ops, shouldRenderPreview, viewMode]);
 
   const inlineRows = useMemo(() => {
-    if (usesSidebar || viewMode !== "inline") return [];
+    if (!shouldRenderPreview || viewMode !== "inline") return [];
     return buildInline(ops);
-  }, [usesSidebar, viewMode, ops]);
+  }, [ops, shouldRenderPreview, viewMode]);
 
   const addBg = isDark ? "rgba(63, 185, 80, 0.10)" : "rgba(26, 127, 55, 0.06)";
   const removeBg = isDark ? "rgba(248, 81, 73, 0.10)" : "rgba(207, 34, 46, 0.06)";
@@ -125,7 +127,7 @@ export function EditToolCall({ tc }: { tc: ToolCallInfo }) {
         }
       </Pressable>
 
-      {!usesSidebar && isWideScreen && expanded && isVisible && (hasData || isRunning) && (
+      {shouldRenderPreview && (hasData || isRunning) && (
         <View
           style={[editStyles.box, { backgroundColor: boxBg, borderColor: boxBorder }]}
           onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}

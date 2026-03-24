@@ -680,6 +680,10 @@ function AssistantMessageComponent({
       </Text>
     </View>
   ) : null;
+  const shouldMeasureThinking =
+    hasThinking &&
+    !message.isStreaming &&
+    (thinkingExpanded || thinkingContentHeight === 0);
 
   return (
     <MessageIdContext.Provider value={message.id}>
@@ -725,18 +729,64 @@ function AssistantMessageComponent({
         )}
 
         {hasThinking && (
-          <View style={{ position: "relative" }}>
+          message.isStreaming ? (
             <View
-              style={{ position: "absolute", opacity: 0, zIndex: -1 }}
-              pointerEvents="none"
+              style={[
+                styles.thinkingBlock,
+                {
+                  backgroundColor: isDark ? "#1A1A1A" : "#F5F5F5",
+                  borderColor: isDark ? "#2A2A2A" : "#E8E8E8",
+                },
+              ]}
             >
-              <View
-                onLayout={(event) => {
-                  const nextHeight = event.nativeEvent.layout.height;
-                  if (nextHeight !== thinkingContentHeight) {
-                    setThinkingContentHeight(nextHeight);
-                  }
-                }}
+              <Text
+                style={[
+                  styles.thinkingText,
+                  { color: isDark ? "#888" : "#666" },
+                ]}
+                selectable
+              >
+                {message.thinking}
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.thinkingWrap}>
+              {shouldMeasureThinking ? (
+                <View
+                  style={styles.thinkingMeasure}
+                  pointerEvents="none"
+                >
+                  <View
+                    onLayout={(event) => {
+                      const nextHeight = event.nativeEvent.layout.height;
+                      if (nextHeight !== thinkingContentHeight) {
+                        setThinkingContentHeight(nextHeight);
+                      }
+                    }}
+                  >
+                    <View
+                      style={[
+                        styles.thinkingBlock,
+                        {
+                          backgroundColor: isDark ? "#1A1A1A" : "#F5F5F5",
+                          borderColor: isDark ? "#2A2A2A" : "#E8E8E8",
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.thinkingText,
+                          { color: isDark ? "#888" : "#666" },
+                        ]}
+                      >
+                        {message.thinking}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              ) : null}
+              <Animated.View
+                style={[styles.thinkingCollapse, thinkingCollapseStyle]}
               >
                 <View
                   style={[
@@ -752,36 +802,14 @@ function AssistantMessageComponent({
                       styles.thinkingText,
                       { color: isDark ? "#888" : "#666" },
                     ]}
+                    selectable
                   >
                     {message.thinking}
                   </Text>
                 </View>
-              </View>
+              </Animated.View>
             </View>
-            <Animated.View
-              style={[styles.thinkingCollapse, thinkingCollapseStyle]}
-            >
-              <View
-                style={[
-                  styles.thinkingBlock,
-                  {
-                    backgroundColor: isDark ? "#1A1A1A" : "#F5F5F5",
-                    borderColor: isDark ? "#2A2A2A" : "#E8E8E8",
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.thinkingText,
-                    { color: isDark ? "#888" : "#666" },
-                  ]}
-                  selectable
-                >
-                  {message.thinking}
-                </Text>
-              </View>
-            </Animated.View>
-          </View>
+          )
         )}
 
         {message.text.length > 0 && (
@@ -965,6 +993,14 @@ const styles = StyleSheet.create({
   },
   thinkingCollapse: {
     overflow: "hidden",
+  },
+  thinkingMeasure: {
+    position: "absolute",
+    opacity: 0,
+    zIndex: -1,
+  },
+  thinkingWrap: {
+    position: "relative",
   },
   thinkingBlock: {
     borderRadius: 8,

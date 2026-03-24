@@ -128,6 +128,18 @@ export class PiClient {
     const current = subject.getValue();
 
     if (current.isReady) {
+      try {
+        if (params.workspaceId) {
+          await this.api.touchAgentSession(sessionId, {
+            workspaceId: params.workspaceId,
+            sessionFile: params.sessionFile,
+          });
+        } else {
+          await this.api.touchChatSession(sessionId, params.sessionFile);
+        }
+      } catch {
+        // keep cached UI state; prompt route can still auto-touch on demand
+      }
       this._ensureSessionStream(sessionId);
       return;
     }
