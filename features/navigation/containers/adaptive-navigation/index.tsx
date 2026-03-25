@@ -233,7 +233,7 @@ export function AdaptiveNavigation({ children }: AdaptiveNavigationProps) {
     return (
       <SafeAreaView
         style={[styles.wideContainer, { backgroundColor: colors.background }]}
-        edges={isDesktopMode ? [] : ["top"]}
+        edges={["top"]}
       >
         {!isDesktopMode && (
           <View
@@ -379,7 +379,7 @@ export function AdaptiveNavigation({ children }: AdaptiveNavigationProps) {
     >
       <SafeAreaView
         style={[styles.narrowSafeArea, { backgroundColor: colors.background }]}
-        edges={isDesktopMode ? [] : ["top"]}
+        edges={["top"]}
       >
         {!isDesktopMode && (
           <View
