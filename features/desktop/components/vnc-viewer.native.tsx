@@ -1,6 +1,6 @@
-import { useMemo } from 'react';
-import { StyleSheet } from 'react-native';
-import { WebView } from 'react-native-webview';
+import { useCallback, useMemo, useState } from 'react';
+import { StatusBar, StyleSheet, View } from 'react-native';
+import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { buildVncHtml } from './vnc-html';
 
 interface VncViewerProps {
@@ -8,9 +8,12 @@ interface VncViewerProps {
   accessToken: string;
   vncPort: number;
   vncPassword?: string | null;
+  onToggleFullscreen?: (fullscreen: boolean) => void;
 }
 
-export function VncViewer({ serverUrl, accessToken, vncPort, vncPassword }: VncViewerProps) {
+export function VncViewer({ serverUrl, accessToken, vncPort, vncPassword, onToggleFullscreen }: VncViewerProps) {
+  const [immersive, setImmersive] = useState(false);
+
   const html = useMemo(() => {
     const url = new URL(serverUrl);
     const wsScheme = url.protocol === 'https:' ? 'wss' : 'ws';
@@ -18,26 +21,47 @@ export function VncViewer({ serverUrl, accessToken, vncPort, vncPassword }: VncV
     return buildVncHtml(wsUrl, vncPassword);
   }, [serverUrl, accessToken, vncPort, vncPassword]);
 
+  const handleMessage = useCallback((event: WebViewMessageEvent) => {
+    try {
+      const data = JSON.parse(event.nativeEvent.data);
+      if (data.type === 'toggleFullscreen') {
+        const next = !immersive;
+        setImmersive(next);
+        onToggleFullscreen?.(next);
+      }
+    } catch {}
+  }, [immersive, onToggleFullscreen]);
+
   const key = `vnc_${vncPort}`;
 
   return (
-    <WebView
-      key={key}
-      source={{ html, baseUrl: 'https://cdn.jsdelivr.net' }}
-      style={styles.webview}
-      originWhitelist={['*']}
-      javaScriptEnabled
-      domStorageEnabled
-      allowsInlineMediaPlayback
-      mediaPlaybackRequiresUserAction={false}
-      startInLoadingState
-      setSupportMultipleWindows={false}
-      mixedContentMode="always"
-    />
+    <View style={styles.container}>
+      <StatusBar hidden={immersive} />
+      <WebView
+        key={key}
+        source={{ html, baseUrl: 'https://cdn.jsdelivr.net' }}
+        style={styles.webview}
+        originWhitelist={['*']}
+        javaScriptEnabled
+        domStorageEnabled
+        allowsInlineMediaPlayback
+        mediaPlaybackRequiresUserAction={false}
+        startInLoadingState
+        setSupportMultipleWindows={false}
+        mixedContentMode="always"
+        keyboardDisplayRequiresUserAction={false}
+        scrollEnabled={false}
+        automaticallyAdjustContentInsets={false}
+        onMessage={handleMessage}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
   webview: {
     flex: 1,
     backgroundColor: '#111',

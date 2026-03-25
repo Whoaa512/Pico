@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Dimensions,
+  PixelRatio,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,7 +14,6 @@ import {
   Play,
   AlertCircle,
   CheckCircle2,
-  XCircle,
   ScreenShare,
   MonitorUp,
 } from 'lucide-react-native';
@@ -23,6 +24,27 @@ import {
   useDesktopStore,
   type DesktopMode,
 } from '../store';
+
+const FIXED_RESOLUTIONS = [
+  { value: '1024x768x24', label: '1024×768' },
+  { value: '1280x720x24', label: '1280×720 (HD)' },
+  { value: '1280x1024x24', label: '1280×1024' },
+  { value: '1920x1080x24', label: '1920×1080 (FHD)' },
+  { value: '2560x1440x24', label: '2560×1440 (QHD)' },
+];
+
+function useScreenResolution() {
+  const [res, setRes] = useState<{ value: string; label: string } | null>(null);
+  useEffect(() => {
+    const screen = Dimensions.get('window');
+    const w = Math.round(screen.width);
+    const h = Math.round(screen.height);
+    if (w > 0 && h > 0) {
+      setRes({ value: `${w}x${h}x24`, label: `${w}×${h} (This screen)` });
+    }
+  }, []);
+  return res;
+}
 
 export function DesktopSetup() {
   const colorScheme = useColorScheme() ?? 'light';
@@ -42,6 +64,11 @@ export function DesktopSetup() {
   const [selectedMode, setSelectedMode] = useState<DesktopMode | null>(null);
   const [selectedBackend, setSelectedBackend] = useState<string | null>(null);
   const [selectedDE, setSelectedDE] = useState<string | null>(null);
+  const screenRes = useScreenResolution();
+  const resolutions = screenRes
+    ? [screenRes, ...FIXED_RESOLUTIONS]
+    : FIXED_RESOLUTIONS;
+  const [selectedResolution, setSelectedResolution] = useState('1280x720x24');
 
   const isWayland = currentDesktop.session_type === 'wayland';
   const hasX11vnc = backends.some((b) => b.id === 'x11vnc' && b.available);
@@ -80,9 +107,9 @@ export function DesktopSetup() {
     if (selectedMode === 'actual') {
       startActual();
     } else if (selectedBackend && selectedDE) {
-      startVirtual(selectedBackend, selectedDE);
+      startVirtual(selectedBackend, selectedDE, selectedResolution);
     }
-  }, [selectedMode, selectedBackend, selectedDE, startActual, startVirtual]);
+  }, [selectedMode, selectedBackend, selectedDE, selectedResolution, startActual, startVirtual]);
 
   const canStart =
     selectedMode === 'actual'
@@ -229,12 +256,10 @@ export function DesktopSetup() {
             VNC Backend
           </Text>
           <View style={styles.optionsGrid}>
-            {virtualBackends.map((backend) => (
+            {availableVirtualBackends.map((backend) => (
               <Pressable
                 key={backend.id}
-                onPress={() =>
-                  backend.available && setSelectedBackend(backend.id)
-                }
+                onPress={() => setSelectedBackend(backend.id)}
                 style={[
                   styles.optionCard,
                   {
@@ -244,29 +269,19 @@ export function DesktopSetup() {
                       selectedBackend === backend.id
                         ? selectedBorder
                         : 'transparent',
-                    opacity: backend.available ? 1 : 0.4,
                   },
                 ]}
               >
-                {backend.available ? (
-                  <CheckCircle2
-                    size={16}
-                    color={
-                      selectedBackend === backend.id
-                        ? colors.success
-                        : colors.textTertiary
-                    }
-                  />
-                ) : (
-                  <XCircle size={16} color={colors.textTertiary} />
-                )}
+                <CheckCircle2
+                  size={16}
+                  color={
+                    selectedBackend === backend.id
+                      ? colors.success
+                      : colors.textTertiary
+                  }
+                />
                 <Text style={[styles.optionName, { color: colors.text }]}>
                   {backend.name}
-                </Text>
-                <Text
-                  style={[styles.optionDetail, { color: colors.textTertiary }]}
-                >
-                  {backend.available ? 'Installed' : 'Not installed'}
                 </Text>
               </Pressable>
             ))}
@@ -278,10 +293,10 @@ export function DesktopSetup() {
                 Desktop Environment
               </Text>
               <View style={styles.optionsGrid}>
-                {desktopEnvironments.map((de) => (
+                {availableDEs.map((de) => (
                   <Pressable
                     key={de.id}
-                    onPress={() => de.available && setSelectedDE(de.id)}
+                    onPress={() => setSelectedDE(de.id)}
                     style={[
                       styles.optionCard,
                       {
@@ -291,32 +306,19 @@ export function DesktopSetup() {
                           selectedDE === de.id
                             ? selectedBorder
                             : 'transparent',
-                        opacity: de.available ? 1 : 0.4,
                       },
                     ]}
                   >
-                    {de.available ? (
-                      <CheckCircle2
-                        size={16}
-                        color={
-                          selectedDE === de.id
-                            ? colors.success
-                            : colors.textTertiary
-                        }
-                      />
-                    ) : (
-                      <XCircle size={16} color={colors.textTertiary} />
-                    )}
+                    <CheckCircle2
+                      size={16}
+                      color={
+                        selectedDE === de.id
+                          ? colors.success
+                          : colors.textTertiary
+                      }
+                    />
                     <Text style={[styles.optionName, { color: colors.text }]}>
                       {de.name}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.optionDetail,
-                        { color: colors.textTertiary },
-                      ]}
-                    >
-                      {de.available ? 'Available' : 'Not installed'}
                     </Text>
                   </Pressable>
                 ))}
@@ -343,6 +345,37 @@ export function DesktopSetup() {
               </Text>
             </View>
           )}
+        </>
+      )}
+
+      {selectedMode === 'virtual' && (
+        <>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            Resolution
+          </Text>
+          <View style={styles.optionsGrid}>
+            {resolutions.map((res) => (
+              <Pressable
+                key={res.value}
+                onPress={() => setSelectedResolution(res.value)}
+                style={[
+                  styles.optionCard,
+                  {
+                    backgroundColor:
+                      selectedResolution === res.value ? selectedBg : cardBg,
+                    borderColor:
+                      selectedResolution === res.value
+                        ? selectedBorder
+                        : 'transparent',
+                  },
+                ]}
+              >
+                <Text style={[styles.optionName, { color: colors.text }]}>
+                  {res.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
         </>
       )}
 

@@ -7,6 +7,7 @@ interface VncViewerProps {
   accessToken: string;
   vncPort: number;
   vncPassword?: string | null;
+  onToggleFullscreen?: (fullscreen: boolean) => void;
 }
 
 export function VncViewer({ serverUrl, accessToken, vncPort, vncPassword }: VncViewerProps) {
@@ -26,7 +27,9 @@ export function VncViewer({ serverUrl, accessToken, vncPort, vncPassword }: VncV
           height: '100%',
           border: 'none',
         }}
-        allow="clipboard-read; clipboard-write; fullscreen"
+        tabIndex={0}
+        allow="clipboard-read; clipboard-write; fullscreen; keyboard-map"
+        allowFullScreen
       />
     </View>
   );

@@ -1,11 +1,13 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import * as ScreenOrientation from 'expo-screen-orientation';
 import { Square } from 'lucide-react-native';
 
 import { Colors, Fonts } from '@/constants/theme';
@@ -37,13 +39,34 @@ export default function DesktopScreen() {
   const fetchStatus = useDesktopStore((s) => s.fetchStatus);
   const stopDesktop = useDesktopStore((s) => s.stopDesktop);
 
+  const isRunning = desktopInfo.status === 'running';
+
   useEffect(() => {
     fetchStatus();
   }, [fetchStatus]);
 
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+
+    if (isRunning) {
+      ScreenOrientation.unlockAsync();
+    }
+    return () => {
+      if (Platform.OS !== 'web') {
+        ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+      }
+    };
+  }, [isRunning]);
+
+  const [immersive, setImmersive] = useState(false);
+
   const handleStop = useCallback(() => {
     stopDesktop();
   }, [stopDesktop]);
+
+  const handleToggleFullscreen = useCallback((fullscreen: boolean) => {
+    setImmersive(fullscreen);
+  }, []);
 
   if (loading || desktopInfo.status === 'starting') {
     return (
@@ -59,38 +82,41 @@ export default function DesktopScreen() {
   if (desktopInfo.status === 'running' && desktopInfo.vnc_port && serverAddress) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={[styles.toolbar, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.toolbarText, { color: colors.textSecondary }]}>
-            {desktopInfo.mode === 'actual' ? 'Screen Share' : 'Virtual Desktop'}
-            {' — '}
-            {desktopInfo.display} (VNC :{desktopInfo.vnc_port})
-          </Text>
-          <Pressable
-            onPress={handleStop}
-            disabled={stopping}
-            style={({ pressed }) => [
-              styles.stopButton,
-              {
-                backgroundColor: isDark ? '#3A1A1A' : '#FFF0F0',
-                opacity: stopping ? 0.5 : pressed ? 0.7 : 1,
-              },
-            ]}
-          >
-            {stopping ? (
-              <ActivityIndicator size={14} color={colors.destructive} />
-            ) : (
-              <Square size={14} color={colors.destructive} />
-            )}
-            <Text style={[styles.stopText, { color: colors.destructive }]}>
-              {stopping ? 'Stopping...' : 'Stop'}
+        {!immersive && (
+          <View style={[styles.toolbar, { borderBottomColor: colors.border }]}>
+            <Text style={[styles.toolbarText, { color: colors.textSecondary }]}>
+              {desktopInfo.mode === 'actual' ? 'Screen Share' : 'Virtual Desktop'}
+              {' — '}
+              {desktopInfo.display} (VNC :{desktopInfo.vnc_port})
             </Text>
-          </Pressable>
-        </View>
+            <Pressable
+              onPress={handleStop}
+              disabled={stopping}
+              style={({ pressed }) => [
+                styles.stopButton,
+                {
+                  backgroundColor: isDark ? '#3A1A1A' : '#FFF0F0',
+                  opacity: stopping ? 0.5 : pressed ? 0.7 : 1,
+                },
+              ]}
+            >
+              {stopping ? (
+                <ActivityIndicator size={14} color={colors.destructive} />
+              ) : (
+                <Square size={14} color={colors.destructive} />
+              )}
+              <Text style={[styles.stopText, { color: colors.destructive }]}>
+                {stopping ? 'Stopping...' : 'Stop'}
+              </Text>
+            </Pressable>
+          </View>
+        )}
         <VncViewer
           serverUrl={serverAddress}
           accessToken={accessToken}
           vncPort={desktopInfo.vnc_port}
           vncPassword={desktopInfo.vnc_password}
+          onToggleFullscreen={handleToggleFullscreen}
         />
       </View>
     );

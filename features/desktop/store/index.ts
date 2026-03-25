@@ -52,6 +52,7 @@ interface DesktopState {
   startActual: () => Promise<void>;
   startVirtual: (backendId: string, deId: string, resolution?: string) => Promise<void>;
   stopDesktop: () => Promise<void>;
+  setDesktopInfo: (info: any) => void;
 }
 
 const INITIAL_INFO: DesktopInfo = {
@@ -177,6 +178,10 @@ export const useDesktopStore = create<DesktopState>((set, get) => ({
         },
       });
     }
+  },
+
+  setDesktopInfo: (info: any) => {
+    set({ desktopInfo: info });
   },
 
   stopDesktop: async () => {

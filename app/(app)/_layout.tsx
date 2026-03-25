@@ -6,6 +6,7 @@ import { PiClientProvider, type PiClientConfig } from '@pi-ui/client';
 import { AdaptiveNavigation } from '@/features/navigation/containers/adaptive-navigation';
 import { TaskEventSubscriber } from '@/features/tasks/components/task-event-subscriber';
 import { PreviewEventSubscriber } from '@/features/preview/components/preview-event-subscriber';
+import { DesktopEventSubscriber } from '@/features/desktop/components/desktop-event-subscriber';
 import { usePreviewServiceWorker, usePreviewTokenSync } from '@/features/preview/service-worker';
 import { useAuthStore } from '@/features/auth/store';
 import { useServersStore } from '@/features/servers/store';
@@ -114,6 +115,7 @@ export default function AppLayout() {
     <PiClientProvider config={piClientConfig}>
       <TaskEventSubscriber />
       <PreviewEventSubscriber />
+      <DesktopEventSubscriber />
       <AdaptiveNavigation>
         <Slot />
       </AdaptiveNavigation>

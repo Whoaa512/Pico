@@ -1,9 +1,12 @@
 use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
 
 use serde::{Deserialize, Serialize};
 use tokio::process::Command;
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::{broadcast, Mutex, RwLock};
 use utoipa::ToSchema;
+
+use crate::services::agent::StreamEvent;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -96,14 +99,24 @@ pub struct DesktopManager {
     process: Arc<RwLock<Option<DesktopProcess>>>,
     detected_backends: Arc<Mutex<Option<Vec<VncBackend>>>>,
     detected_des: Arc<Mutex<Option<Vec<DesktopEnvironment>>>>,
+    broadcast_tx: broadcast::Sender<StreamEvent>,
+    event_counter: Arc<AtomicU64>,
+    event_buffer: Arc<Mutex<std::collections::VecDeque<StreamEvent>>>,
 }
 
 impl DesktopManager {
-    pub fn new() -> Self {
+    pub fn new(
+        broadcast_tx: broadcast::Sender<StreamEvent>,
+        event_counter: Arc<AtomicU64>,
+        event_buffer: Arc<Mutex<std::collections::VecDeque<StreamEvent>>>,
+    ) -> Self {
         Self {
             process: Arc::new(RwLock::new(None)),
             detected_backends: Arc::new(Mutex::new(None)),
             detected_des: Arc::new(Mutex::new(None)),
+            broadcast_tx,
+            event_counter,
+            event_buffer,
         }
     }
 
@@ -321,6 +334,9 @@ impl DesktopManager {
 
         let process_ref = self.process.clone();
         let x_display = std::env::var("DISPLAY").unwrap_or_else(|_| ":0".into());
+        let tx = self.broadcast_tx.clone();
+        let ctr = self.event_counter.clone();
+        let buf = self.event_buffer.clone();
         let handle = tokio::spawn(async move {
             let result = match backend_id.as_str() {
                 "krfb" => run_actual_krfb(vnc_port, vnc_password.as_deref().unwrap_or(""), &process_ref, kill_rx).await,
@@ -334,6 +350,8 @@ impl DesktopManager {
                     p.status = DesktopStatus::Error;
                     p.error = Some(e);
                 }
+                drop(proc);
+                emit_desktop_event(&process_ref, &tx, &ctr, &buf).await;
             }
         });
 
@@ -345,6 +363,7 @@ impl DesktopManager {
         }
 
         self.wait_until_settled().await;
+        self.emit_status().await;
         Ok(self.status().await)
     }
 
@@ -410,6 +429,9 @@ impl DesktopManager {
         let de_command = de.command.clone();
         let backend_id_owned = backend_id.to_string();
         let resolution_owned = resolution.to_string();
+        let tx2 = self.broadcast_tx.clone();
+        let ctr2 = self.event_counter.clone();
+        let buf2 = self.event_buffer.clone();
 
         let handle = tokio::spawn(async move {
             let result = run_virtual_desktop(
@@ -429,6 +451,8 @@ impl DesktopManager {
                     p.status = DesktopStatus::Error;
                     p.error = Some(e);
                 }
+                drop(proc);
+                emit_desktop_event(&process_ref, &tx2, &ctr2, &buf2).await;
             }
         });
 
@@ -440,6 +464,7 @@ impl DesktopManager {
         }
 
         self.wait_until_settled().await;
+        self.emit_status().await;
         Ok(self.status().await)
     }
 
@@ -463,6 +488,7 @@ impl DesktopManager {
             *proc = None;
         }
 
+        self.emit_status().await;
         Ok(self.status().await)
     }
 
@@ -481,6 +507,30 @@ impl DesktopManager {
             }
         }
         Ok(())
+    }
+
+    async fn emit_status(&self) {
+        let info = self.status().await;
+        let evt_id = self
+            .event_counter
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let data = serde_json::to_value(&info).unwrap_or_default();
+        let stream_event = StreamEvent {
+            id: evt_id,
+            session_id: String::new(),
+            workspace_id: String::new(),
+            event_type: "desktop_status".to_string(),
+            data,
+            timestamp: chrono::Utc::now().timestamp_millis(),
+        };
+        {
+            let mut buf = self.event_buffer.lock().await;
+            if buf.len() >= 10_000 {
+                buf.pop_front();
+            }
+            buf.push_back(stream_event.clone());
+        }
+        let _ = self.broadcast_tx.send(stream_event);
     }
 
     async fn wait_until_settled(&self) {
@@ -1112,6 +1162,50 @@ async fn ensure_krfb_desktop_file() {
             }
         }
     }
+}
+
+async fn emit_desktop_event(
+    process_ref: &Arc<RwLock<Option<DesktopProcess>>>,
+    broadcast_tx: &broadcast::Sender<StreamEvent>,
+    event_counter: &Arc<AtomicU64>,
+    event_buffer: &Arc<Mutex<std::collections::VecDeque<StreamEvent>>>,
+) {
+    let info = {
+        let proc = process_ref.read().await;
+        match &*proc {
+            Some(p) => DesktopInfo {
+                status: p.status.clone(),
+                mode: Some(p.mode.clone()),
+                backend_id: Some(p.backend_id.clone()),
+                de_id: Some(p.de_id.clone()),
+                display: Some(p.display.clone()),
+                vnc_port: Some(p.vnc_port),
+                vnc_password: p.vnc_password.clone(),
+                error: p.error.clone(),
+            },
+            None => DesktopInfo {
+                status: DesktopStatus::Stopped,
+                mode: None, backend_id: None, de_id: None,
+                display: None, vnc_port: None, vnc_password: None, error: None,
+            },
+        }
+    };
+    let evt_id = event_counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    let data = serde_json::to_value(&info).unwrap_or_default();
+    let stream_event = StreamEvent {
+        id: evt_id,
+        session_id: String::new(),
+        workspace_id: String::new(),
+        event_type: "desktop_status".to_string(),
+        data,
+        timestamp: chrono::Utc::now().timestamp_millis(),
+    };
+    {
+        let mut buf = event_buffer.lock().await;
+        if buf.len() >= 10_000 { buf.pop_front(); }
+        buf.push_back(stream_event.clone());
+    }
+    let _ = broadcast_tx.send(stream_event);
 }
 
 fn parse_resolution(res: &str) -> (u32, u32) {

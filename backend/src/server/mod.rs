@@ -95,7 +95,11 @@ pub async fn serve(cli: Cli, force_qr: bool) -> anyhow::Result<()> {
     ));
     port_scanner.start_periodic_scan();
 
-    let desktop = DesktopManager::new();
+    let desktop = DesktopManager::new(
+        agent.broadcast_tx().clone(),
+        agent.event_counter().clone(),
+        agent.event_buffer().clone(),
+    );
 
     let state = AppState {
         config: Arc::new(config.clone()),
