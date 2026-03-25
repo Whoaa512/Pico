@@ -235,23 +235,23 @@ export function AdaptiveNavigation({ children }: AdaptiveNavigationProps) {
         style={[styles.wideContainer, { backgroundColor: colors.background }]}
         edges={["top"]}
       >
-        {!isDesktopMode && (
-          <View
-            style={[
-              styles.modeToggleRow,
-              { backgroundColor: isDark ? "#1a1a1a" : "#F5F4F1" },
-            ]}
-          >
-            <AppModeToggle />
-          </View>
-        )}
+        <View
+          style={[
+            styles.modeToggleRow,
+            { backgroundColor: isDark ? "#1a1a1a" : "#F5F4F1" },
+          ]}
+        >
+          <AppModeToggle />
+        </View>
         {hasServer && !isDesktopMode ? (
           <HeaderBar
             onToggleSidebar={handleToggleSidebar}
             onToggleChatSidebar={handleToggleChatSidebar}
             sidebarVisible={isPersistent}
           />
-        ) : null}
+        ) : (
+          <View style={{ height: 0 }} />
+        )}
         <View style={styles.bodyRow}>
           {hasServer && railMounted && (
             <Animated.View
@@ -381,16 +381,14 @@ export function AdaptiveNavigation({ children }: AdaptiveNavigationProps) {
         style={[styles.narrowSafeArea, { backgroundColor: colors.background }]}
         edges={["top"]}
       >
-        {!isDesktopMode && (
-          <View
-            style={[
-              styles.modeToggleRow,
-              { backgroundColor: isDark ? "#1a1a1a" : "#F5F4F1" },
-            ]}
-          >
-            <AppModeToggle />
-          </View>
-        )}
+        <View
+          style={[
+            styles.modeToggleRow,
+            { backgroundColor: isDark ? "#1a1a1a" : "#F5F4F1" },
+          ]}
+        >
+          <AppModeToggle />
+        </View>
         {hasServer && !isDesktopMode && (
           <MobileHeaderBar
             onWorkspacePress={() => setSheetVisible(true)}
