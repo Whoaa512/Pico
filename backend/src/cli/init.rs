@@ -1,6 +1,49 @@
 use crate::config;
 use crate::terminal::{prompt_input, prompt_password};
 
+fn get_system_username() -> String {
+    #[cfg(unix)]
+    {
+        std::env::var("USER")
+            .or_else(|_| {
+                std::process::Command::new("whoami")
+                    .output()
+                    .ok()
+                    .and_then(|o| String::from_utf8(o.stdout).ok())
+                    .map(|s| s.trim().to_string())
+                    .ok_or(std::env::VarError::NotPresent)
+            })
+            .unwrap_or_else(|_| "admin".to_string())
+    }
+
+    #[cfg(windows)]
+    {
+        std::env::var("USERNAME")
+            .or_else(|_| {
+                std::process::Command::new("cmd")
+                    .args(["/C", "whoami"])
+                    .output()
+                    .ok()
+                    .and_then(|o| String::from_utf8(o.stdout).ok())
+                    .map(|s| {
+                        let trimmed = s.trim();
+                        trimmed
+                            .rsplit('\\')
+                            .next()
+                            .unwrap_or(trimmed)
+                            .to_string()
+                    })
+                    .ok_or(std::env::VarError::NotPresent)
+            })
+            .unwrap_or_else(|_| "admin".to_string())
+    }
+
+    #[cfg(not(any(unix, windows)))]
+    {
+        "admin".to_string()
+    }
+}
+
 pub fn run_init() -> anyhow::Result<()> {
     let config_path = std::path::PathBuf::from("config.toml");
 
@@ -12,7 +55,9 @@ pub fn run_init() -> anyhow::Result<()> {
     println!("=== pi-server init ===");
     println!();
 
-    let username = prompt_input("Username [admin]: ").unwrap_or_else(|| "admin".to_string());
+    let default_username = get_system_username();
+    let username = prompt_input(&format!("Username [{}]: ", default_username))
+        .unwrap_or(default_username);
 
     let password = prompt_password("Password: ");
     if password.is_empty() {
