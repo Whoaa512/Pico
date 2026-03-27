@@ -67,7 +67,10 @@ export function VncViewer({
     const [menuOpen, setMenuOpen] = useState(false);
     const menuAnim = useRef(new Animated.Value(0)).current;
     const [skImage, setSkImage] = useState<SkImage | null>(null);
+    const skImageRef = useRef<SkImage | null>(null);
     const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
+    const imageFramePendingRef = useRef(false);
+    const imageFrameRef = useRef<ReturnType<typeof requestAnimationFrame> | null>(null);
 
     const inputRef = useRef<TextInput>(null);
     const lastTextRef = useRef('______');
@@ -78,7 +81,6 @@ export function VncViewer({
 
     const cursorX = useSharedValue(0);
     const cursorY = useSharedValue(0);
-    const [cursorPos, setCursorPos] = useState({ x: 0, y: 0 });
     const buttonMask = useSharedValue(0);
     const prevTranslationX = useSharedValue(0);
     const prevTranslationY = useSharedValue(0);
@@ -137,6 +139,32 @@ export function VncViewer({
         );
     }, []);
 
+    const scheduleSkImageCommit = useCallback(() => {
+        if (imageFramePendingRef.current) return;
+        imageFramePendingRef.current = true;
+        imageFrameRef.current = requestAnimationFrame(() => {
+            imageFramePendingRef.current = false;
+            imageFrameRef.current = null;
+
+            const fb = framebufferRef.current;
+            const width = fbWidthRef.current;
+            const height = fbHeightRef.current;
+            if (!fb || width <= 0 || height <= 0) return;
+
+            const nextImage = buildSkImage(fb, width, height);
+            if (!nextImage) return;
+
+            const prevImage = skImageRef.current;
+            skImageRef.current = nextImage;
+            setSkImage(nextImage);
+            if (prevImage && prevImage !== nextImage) {
+                requestAnimationFrame(() => {
+                    prevImage.dispose();
+                });
+            }
+        });
+    }, [buildSkImage]);
+
     const handleFramebufferUpdate = useCallback((event: FramebufferUpdateEvent) => {
         let fb = framebufferRef.current;
         const fbW = fbWidthRef.current;
@@ -163,13 +191,19 @@ export function VncViewer({
             }
         }
 
-        const img = buildSkImage(fb, fbWidthRef.current, fbHeightRef.current);
-        if (img) {
-            setSkImage(img);
-        }
-    }, [blitRect, copyRect, buildSkImage]);
+        scheduleSkImageCommit();
+    }, [blitRect, copyRect, scheduleSkImageCommit]);
 
     const handleDisplayInit = useCallback((event: DisplayInitEvent) => {
+        if (imageFrameRef.current != null) {
+            cancelAnimationFrame(imageFrameRef.current);
+            imageFrameRef.current = null;
+        }
+        imageFramePendingRef.current = false;
+        const prevImage = skImageRef.current;
+        skImageRef.current = null;
+        setSkImage(null);
+        prevImage?.dispose();
         const fb = new Uint8ClampedArray(event.width * event.height * 4);
         framebufferRef.current = fb;
         fbWidthRef.current = event.width;
@@ -178,7 +212,6 @@ export function VncViewer({
         fbHShared.value = event.height;
         cursorX.value = Math.floor(event.width / 2);
         cursorY.value = Math.floor(event.height / 2);
-        setCursorPos({ x: Math.floor(event.width / 2), y: Math.floor(event.height / 2) });
     }, [cursorX, cursorY, fbWShared, fbHShared]);
 
     const session = useVncSession({
@@ -212,10 +245,6 @@ export function VncViewer({
         session.sendPointerEvent(mask, x, y);
     }, [session]);
 
-    const jsUpdateCursor = useCallback((x: number, y: number) => {
-        setCursorPos({ x, y });
-    }, []);
-
     const jsSendPointerDelayed = useCallback((mask: number, x: number, y: number, delay: number) => {
         setTimeout(() => session.sendPointerEvent(mask, x, y), delay);
     }, [session]);
@@ -245,7 +274,6 @@ export function VncViewer({
                 cursorY.value = Math.max(0, Math.min(fbHShared.value - 1, cursorY.value));
                 const x = Math.floor(cursorX.value);
                 const y = Math.floor(cursorY.value);
-                runOnJS(jsUpdateCursor)(x, y);
                 runOnJS(jsSendPointer)(buttonMask.value, x, y);
             })
             .onEnd(() => {
@@ -255,7 +283,7 @@ export function VncViewer({
                     runOnJS(jsSendPointer)(0, Math.floor(cursorX.value), Math.floor(cursorY.value));
                 }
             }),
-        [prevTranslationX, prevTranslationY, scaleShared, cursorX, cursorY, fbWShared, fbHShared, buttonMask, jsUpdateCursor, jsSendPointer],
+        [prevTranslationX, prevTranslationY, scaleShared, cursorX, cursorY, fbWShared, fbHShared, buttonMask, jsSendPointer],
     );
 
     const tapGesture = useMemo(() =>
@@ -421,6 +449,19 @@ export function VncViewer({
         const sub = BackHandler.addEventListener('hardwareBackPress', handler);
         return () => sub.remove();
     }, [kbdVisible, immersive, menuOpen, onToggleFullscreen, toggleMenu]);
+
+    useEffect(() => () => {
+        if (layoutTimerRef.current) {
+            clearTimeout(layoutTimerRef.current);
+            layoutTimerRef.current = null;
+        }
+        if (imageFrameRef.current != null) {
+            cancelAnimationFrame(imageFrameRef.current);
+            imageFrameRef.current = null;
+        }
+        skImageRef.current?.dispose();
+        skImageRef.current = null;
+    }, []);
 
     const isConnected = session.connectionState === 'connected';
     const isConnecting = session.connectionState === 'connecting' || session.connectionState === 'handshaking';

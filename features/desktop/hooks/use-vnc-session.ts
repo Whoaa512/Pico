@@ -20,7 +20,6 @@ export interface FramebufferUpdateEvent {
     width: number;
     height: number;
     rects: RemoteDisplayRect[];
-    framebuffer?: Uint8ClampedArray;
 }
 
 export interface DisplayInitEvent {
@@ -197,7 +196,6 @@ export function useVncSession(options: UseVncSessionOptions): UseVncSessionResul
                     width: event.width,
                     height: event.height,
                     rects: event.rects,
-                    framebuffer: (event as { framebuffer?: Uint8ClampedArray }).framebuffer,
                 });
                 break;
             }

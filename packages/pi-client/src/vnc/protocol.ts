@@ -28,16 +28,9 @@ export type RemoteDisplayRect =
         height: number;
         srcX: number;
         srcY: number;
-      }
+      };
     | {
         kind: 'resize';
-        x: number;
-        y: number;
-        width: number;
-        height: number;
-      }
-    | {
-        kind: 'pipeline';
         x: number;
         y: number;
         width: number;

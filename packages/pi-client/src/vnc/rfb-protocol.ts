@@ -371,7 +371,7 @@ function parseZrleRect(
     if (bytes.byteLength < offset + 4) return null;
     const compressedLength = new DataView(bytes.buffer, bytes.byteOffset + offset, 4).getUint32(0, false);
     if (bytes.byteLength < offset + 4 + compressedLength) return null;
-    const compressed = bytes.slice(offset + 4, offset + 4 + compressedLength);
+    const compressed = bytes.subarray(offset + 4, offset + 4 + compressedLength);
     let decoded: Uint8Array;
     try {
         decoded = inflateZrle(compressed);
@@ -396,7 +396,7 @@ function parseZrleRect(
             if (!runLengthEncoded && paletteSize === 0) {
                 const rawLength = tileWidth * tileHeight * bytesPerPixel;
                 if (decoded.byteLength < cursor + rawLength) return null;
-                const tileRgba = decodeRawRect(decoded.slice(cursor, cursor + rawLength), tileWidth, tileHeight, format);
+                const tileRgba = decodeRawRect(decoded.subarray(cursor, cursor + rawLength), tileWidth, tileHeight, format);
                 cursor += rawLength;
                 blitRgbaTile(rgba, width, tileX, tileY, tileWidth, tileHeight, tileRgba);
                 continue;
@@ -510,9 +510,51 @@ function parseZrleRect(
     };
 }
 
+function inflateZrleRect(
+    bytes: Uint8Array,
+    offset: number,
+    inflateZrle: ZrleInflater,
+): ZrleRectResult | null {
+    if (bytes.byteLength < offset + 4) return null;
+    const compressedLength = new DataView(bytes.buffer, bytes.byteOffset + offset, 4).getUint32(0, false);
+    if (bytes.byteLength < offset + 4 + compressedLength) return null;
+    try {
+        return {
+            consumed: 4 + compressedLength,
+            decompressed: inflateZrle(bytes.subarray(offset + 4, offset + 4 + compressedLength)),
+        };
+    } catch {
+        return {
+            consumed: 4 + compressedLength,
+            skipped: true,
+        };
+    }
+}
+
 interface RreRectResult {
     consumed: number;
     rgba: Uint8ClampedArray;
+}
+
+interface RectMeasurement {
+    consumed: number;
+}
+
+function measureRreRect(
+    bytes: Uint8Array,
+    offset: number,
+    pixelFormat: RemoteDisplayPixelFormat,
+): RectMeasurement | null {
+    const format = pixelFormat || DEFAULT_CLIENT_PIXEL_FORMAT;
+    const bytesPerPixel = Math.max(1, Math.floor(Number(format.bitsPerPixel || 0) / 8));
+    if (bytes.byteLength < offset + 4 + bytesPerPixel) return null;
+
+    const view = new DataView(bytes.buffer, bytes.byteOffset + offset, bytes.byteLength - offset);
+    const subrectCount = view.getUint32(0, false);
+    const totalSize = 4 + bytesPerPixel + subrectCount * (bytesPerPixel + 8);
+    if (bytes.byteLength < offset + totalSize) return null;
+
+    return { consumed: totalSize };
 }
 
 function parseRreRect(
@@ -564,6 +606,59 @@ interface HextileRectResult {
     rgba: Uint8ClampedArray;
 }
 
+function measureHextileRect(
+    bytes: Uint8Array,
+    offset: number,
+    width: number,
+    height: number,
+    pixelFormat: RemoteDisplayPixelFormat,
+): RectMeasurement | null {
+    const format = pixelFormat || DEFAULT_CLIENT_PIXEL_FORMAT;
+    const bytesPerPixel = Math.max(1, Math.floor(Number(format.bitsPerPixel || 0) / 8));
+    let cursor = offset;
+
+    for (let tileY = 0; tileY < height; tileY += 16) {
+        const tileHeight = Math.min(16, height - tileY);
+        for (let tileX = 0; tileX < width; tileX += 16) {
+            const tileWidth = Math.min(16, width - tileX);
+            if (bytes.byteLength < cursor + 1) return null;
+            const subencoding = bytes[cursor++];
+
+            if (subencoding & 0x01) {
+                const rawLength = tileWidth * tileHeight * bytesPerPixel;
+                if (bytes.byteLength < cursor + rawLength) return null;
+                cursor += rawLength;
+                continue;
+            }
+
+            if (subencoding & 0x02) {
+                if (bytes.byteLength < cursor + bytesPerPixel) return null;
+                cursor += bytesPerPixel;
+            }
+            if (subencoding & 0x04) {
+                if (bytes.byteLength < cursor + bytesPerPixel) return null;
+                cursor += bytesPerPixel;
+            }
+            if (subencoding & 0x08) {
+                if (bytes.byteLength < cursor + 1) return null;
+                const subrectCount = bytes[cursor++];
+                for (let i = 0; i < subrectCount; i += 1) {
+                    if (subencoding & 0x10) {
+                        if (bytes.byteLength < cursor + bytesPerPixel) return null;
+                        cursor += bytesPerPixel;
+                    }
+                    if (bytes.byteLength < cursor + 2) return null;
+                    cursor += 2;
+                }
+            }
+        }
+    }
+
+    return {
+        consumed: cursor - offset,
+    };
+}
+
 function parseHextileRect(
     bytes: Uint8Array,
     offset: number,
@@ -589,7 +684,7 @@ function parseHextileRect(
             if (subencoding & 0x01) {
                 const rawLength = tileWidth * tileHeight * bytesPerPixel;
                 if (bytes.byteLength < cursor + rawLength) return null;
-                const tileRgba = decodeRawRect(bytes.slice(cursor, cursor + rawLength), tileWidth, tileHeight, format);
+                const tileRgba = decodeRawRect(bytes.subarray(cursor, cursor + rawLength), tileWidth, tileHeight, format);
                 cursor += rawLength;
                 blitRgbaTile(rgba, width, tileX, tileY, tileWidth, tileHeight, tileRgba);
                 continue;
@@ -642,7 +737,7 @@ function parseHextileRect(
 
 export interface WasmDisplayPipeline {
     initFramebuffer(width: number, height: number): void;
-    getFramebuffer(): Uint8ClampedArray;
+    readFramebufferRect(x: number, y: number, width: number, height: number): Uint8ClampedArray;
     processRawRect(data: Uint8Array, x: number, y: number, width: number, height: number, pixelFormat: RemoteDisplayPixelFormat): void;
     processCopyRect(x: number, y: number, width: number, height: number, srcX: number, srcY: number): void;
     processRreRect(data: Uint8Array, x: number, y: number, width: number, height: number, pixelFormat: RemoteDisplayPixelFormat): void;
@@ -681,6 +776,8 @@ export class VncRemoteDisplayProtocol implements RemoteDisplayProtocolAdapter {
     private pipeline: WasmDisplayPipeline | null;
     private encodings: number[];
     private buffer: Uint8Array;
+    private readOffset: number;
+    private writeOffset: number;
     private serverVersion: ParsedVersion | null;
     private clientVersionText: string | null;
     private serverPixelFormat: RemoteDisplayPixelFormat | null;
@@ -694,7 +791,9 @@ export class VncRemoteDisplayProtocol implements RemoteDisplayProtocolAdapter {
         this.pipeline = options.pipeline || null;
         this.encodings = normalizeEncodings(options.encodings || null);
         this.state = 'version';
-        this.buffer = new Uint8Array(0);
+        this.buffer = new Uint8Array(65536);
+        this.readOffset = 0;
+        this.writeOffset = 0;
         this.serverVersion = null;
         this.clientVersionText = null;
         this.framebufferWidth = 0;
@@ -708,7 +807,7 @@ export class VncRemoteDisplayProtocol implements RemoteDisplayProtocolAdapter {
 
     receive(chunk?: ArrayBuffer | Uint8Array | null): RemoteDisplayProtocolReceiveResult {
         if (chunk) {
-            this.buffer = concatBytes(this.buffer, chunk instanceof ArrayBuffer ? new Uint8Array(chunk) : chunk);
+            this.appendToBuffer(chunk instanceof ArrayBuffer ? new Uint8Array(chunk) : toUint8Array(chunk));
         }
         const events: RemoteDisplayProtocolEvent[] = [];
         const outgoing: Uint8Array[] = [];
@@ -717,7 +816,7 @@ export class VncRemoteDisplayProtocol implements RemoteDisplayProtocolAdapter {
             progressed = false;
 
             if (this.state === 'version') {
-                if (this.buffer.byteLength < 12) break;
+                if (this.available < 12) break;
                 const bytes = this.consume(12);
                 const text = bytesToAscii(bytes);
                 const version = parseVersionString(text);
@@ -734,19 +833,19 @@ export class VncRemoteDisplayProtocol implements RemoteDisplayProtocolAdapter {
             }
 
             if (this.state === 'security-types') {
-                if (this.buffer.byteLength < 1) break;
-                const count = this.buffer[0];
+                if (this.available < 1) break;
+                const count = this.buffer[this.readOffset];
                 if (count === 0) {
-                    if (this.buffer.byteLength < 5) break;
-                    const view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
+                    if (this.available < 5) break;
+                    const view = new DataView(this.buffer.buffer, this.buffer.byteOffset + this.readOffset, this.available);
                     const reasonLength = view.getUint32(1, false);
-                    if (this.buffer.byteLength < 5 + reasonLength) break;
-                    this.consume(1);
-                    const reason = bytesToAscii(this.consume(4 + reasonLength).slice(4));
+                    if (this.available < 5 + reasonLength) break;
+                    this.readOffset += 1;
+                    const reason = bytesToAscii(this.consume(4 + reasonLength).subarray(4));
                     throw new Error(reason || 'VNC server rejected the connection.');
                 }
-                if (this.buffer.byteLength < 1 + count) break;
-                this.consume(1);
+                if (this.available < 1 + count) break;
+                this.readOffset += 1;
                 const types = Array.from(this.consume(count));
                 events.push({ type: 'security-types', protocol: PROTOCOL, types });
                 let selectedType: number | null = null;
@@ -767,16 +866,16 @@ export class VncRemoteDisplayProtocol implements RemoteDisplayProtocolAdapter {
             }
 
             if (this.state === 'security-type-33') {
-                if (this.buffer.byteLength < 4) break;
-                const view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
+                if (this.available < 4) break;
+                const view = new DataView(this.buffer.buffer, this.buffer.byteOffset + this.readOffset, this.available);
                 const securityType = view.getUint32(0, false);
-                this.consume(4);
+                this.readOffset += 4;
                 if (securityType === 0) {
-                    if (this.buffer.byteLength < 4) break;
-                    const reasonView = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
+                    if (this.available < 4) break;
+                    const reasonView = new DataView(this.buffer.buffer, this.buffer.byteOffset + this.readOffset, this.available);
                     const reasonLength = reasonView.getUint32(0, false);
-                    if (this.buffer.byteLength < 4 + reasonLength) break;
-                    const reason = bytesToAscii(this.consume(4 + reasonLength).slice(4));
+                    if (this.available < 4 + reasonLength) break;
+                    const reason = bytesToAscii(this.consume(4 + reasonLength).subarray(4));
                     throw new Error(reason || 'VNC server rejected the connection.');
                 }
                 if (securityType === 2) {
@@ -799,7 +898,7 @@ export class VncRemoteDisplayProtocol implements RemoteDisplayProtocolAdapter {
             }
 
             if (this.state === 'security-challenge') {
-                if (this.buffer.byteLength < 16) break;
+                if (this.available < 16) break;
                 if (this.password === null) {
                     throw new Error('VNC password authentication is required. Enter a password and reconnect.');
                 }
@@ -811,15 +910,16 @@ export class VncRemoteDisplayProtocol implements RemoteDisplayProtocolAdapter {
             }
 
             if (this.state === 'security-result') {
-                if (this.buffer.byteLength < 4) break;
-                const view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
+                if (this.available < 4) break;
+                const view = new DataView(this.buffer.buffer, this.buffer.byteOffset + this.readOffset, this.available);
                 const result = view.getUint32(0, false);
-                this.consume(4);
+                this.readOffset += 4;
                 if (result !== 0) {
-                    if (this.buffer.byteLength >= 4) {
-                        const reasonLength = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength).getUint32(0, false);
-                        if (this.buffer.byteLength >= 4 + reasonLength) {
-                            const reason = bytesToAscii(this.consume(4 + reasonLength).slice(4));
+                    if (this.available >= 4) {
+                        const reasonView = new DataView(this.buffer.buffer, this.buffer.byteOffset + this.readOffset, this.available);
+                        const reasonLength = reasonView.getUint32(0, false);
+                        if (this.available >= 4 + reasonLength) {
+                            const reason = bytesToAscii(this.consume(4 + reasonLength).subarray(4));
                             throw new Error(reason || 'VNC authentication failed.');
                         }
                     }
@@ -833,13 +933,13 @@ export class VncRemoteDisplayProtocol implements RemoteDisplayProtocolAdapter {
             }
 
             if (this.state === 'server-init') {
-                if (this.buffer.byteLength < 24) break;
-                const view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
-                const width = view.getUint16(0, false);
-                const height = view.getUint16(2, false);
-                const pixelFormat = parsePixelFormat(view, 4);
-                const nameLength = view.getUint32(20, false);
-                if (this.buffer.byteLength < 24 + nameLength) break;
+                if (this.available < 24) break;
+                const peekView = new DataView(this.buffer.buffer, this.buffer.byteOffset + this.readOffset, this.available);
+                const width = peekView.getUint16(0, false);
+                const height = peekView.getUint16(2, false);
+                const pixelFormat = parsePixelFormat(peekView, 4);
+                const nameLength = peekView.getUint32(20, false);
+                if (this.available < 24 + nameLength) break;
                 const fixed = this.consume(24);
                 const fixedView = new DataView(fixed.buffer, fixed.byteOffset, fixed.byteLength);
                 this.framebufferWidth = fixedView.getUint16(0, false);
@@ -866,22 +966,23 @@ export class VncRemoteDisplayProtocol implements RemoteDisplayProtocolAdapter {
             }
 
             if (this.state === 'connected') {
-                if (this.buffer.byteLength < 1) break;
-                const type = this.buffer[0];
+                if (this.available < 1) break;
+                const data = this.buffer.subarray(this.readOffset, this.writeOffset);
+                const type = data[0];
                 if (type === 0) {
-                    if (this.buffer.byteLength < 4) break;
-                    const headerView = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
+                    if (data.byteLength < 4) break;
+                    const headerView = new DataView(data.buffer, data.byteOffset, data.byteLength);
                     const numberOfRectangles = headerView.getUint16(2, false);
                     let offset = 4;
                     const rects: RemoteDisplayRect[] = [];
                     let incomplete = false;
                     const usePipeline = !!this.pipeline;
                     for (let i = 0; i < numberOfRectangles; i += 1) {
-                        if (this.buffer.byteLength < offset + 12) {
+                        if (data.byteLength < offset + 12) {
                             incomplete = true;
                             break;
                         }
-                        const rectView = new DataView(this.buffer.buffer, this.buffer.byteOffset + offset, 12);
+                        const rectView = new DataView(data.buffer, data.byteOffset + offset, 12);
                         const x = rectView.getUint16(0, false);
                         const y = rectView.getUint16(2, false);
                         const width = rectView.getUint16(4, false);
@@ -892,15 +993,19 @@ export class VncRemoteDisplayProtocol implements RemoteDisplayProtocolAdapter {
                         if (encoding === 0) {
                             const bytesPerPixel = Math.max(1, Math.floor(Number(this.clientPixelFormat.bitsPerPixel || 0) / 8));
                             const dataLength = width * height * bytesPerPixel;
-                            if (this.buffer.byteLength < offset + dataLength) {
+                            if (data.byteLength < offset + dataLength) {
                                 incomplete = true;
                                 break;
                             }
-                            const raw = this.buffer.slice(offset, offset + dataLength);
+                            const raw = data.subarray(offset, offset + dataLength);
                             offset += dataLength;
                             if (usePipeline) {
                                 this.pipeline!.processRawRect(raw, x, y, width, height, this.clientPixelFormat);
-                                rects.push({ kind: 'pipeline', x, y, width, height });
+                                rects.push({
+                                    kind: 'rgba',
+                                    x, y, width, height,
+                                    rgba: this.pipeline!.readFramebufferRect(x, y, width, height),
+                                });
                             } else {
                                 rects.push({
                                     kind: 'rgba',
@@ -912,34 +1017,44 @@ export class VncRemoteDisplayProtocol implements RemoteDisplayProtocolAdapter {
                         }
 
                         if (encoding === 2) {
-                            const rre = parseRreRect(this.buffer, offset, width, height, this.clientPixelFormat);
+                            const rre = usePipeline
+                                ? measureRreRect(data, offset, this.clientPixelFormat)
+                                : parseRreRect(data, offset, width, height, this.clientPixelFormat);
                             if (!rre) {
                                 incomplete = true;
                                 break;
                             }
                             if (usePipeline) {
-                                const rreData = this.buffer.slice(offset, offset + rre.consumed);
+                                const rreData = data.subarray(offset, offset + rre.consumed);
                                 this.pipeline!.processRreRect(rreData, x, y, width, height, this.clientPixelFormat);
-                                rects.push({ kind: 'pipeline', x, y, width, height });
+                                rects.push({
+                                    kind: 'rgba',
+                                    x, y, width, height,
+                                    rgba: this.pipeline!.readFramebufferRect(x, y, width, height),
+                                });
                             } else {
-                                rects.push({ kind: 'rgba', x, y, width, height, rgba: rre.rgba });
+                                rects.push({ kind: 'rgba', x, y, width, height, rgba: (rre as RreRectResult).rgba });
                             }
                             offset += rre.consumed;
                             continue;
                         }
 
                         if (encoding === 1) {
-                            if (this.buffer.byteLength < offset + 4) {
+                            if (data.byteLength < offset + 4) {
                                 incomplete = true;
                                 break;
                             }
-                            const copyView = new DataView(this.buffer.buffer, this.buffer.byteOffset + offset, 4);
+                            const copyView = new DataView(data.buffer, data.byteOffset + offset, 4);
                             const srcX = copyView.getUint16(0, false);
                             const srcY = copyView.getUint16(2, false);
                             offset += 4;
                             if (usePipeline) {
                                 this.pipeline!.processCopyRect(x, y, width, height, srcX, srcY);
-                                rects.push({ kind: 'pipeline', x, y, width, height });
+                                rects.push({
+                                    kind: 'rgba',
+                                    x, y, width, height,
+                                    rgba: this.pipeline!.readFramebufferRect(x, y, width, height),
+                                });
                             } else {
                                 rects.push({ kind: 'copy', x, y, width, height, srcX, srcY });
                             }
@@ -947,7 +1062,9 @@ export class VncRemoteDisplayProtocol implements RemoteDisplayProtocolAdapter {
                         }
 
                         if (encoding === 16) {
-                            const zrle = parseZrleRect(this.buffer, offset, width, height, this.clientPixelFormat, this.decodeRawRect, this.inflateZrle);
+                            const zrle = usePipeline
+                                ? inflateZrleRect(data, offset, this.inflateZrle)
+                                : parseZrleRect(data, offset, width, height, this.clientPixelFormat, this.decodeRawRect, this.inflateZrle);
                             if (!zrle) {
                                 incomplete = true;
                                 break;
@@ -956,7 +1073,11 @@ export class VncRemoteDisplayProtocol implements RemoteDisplayProtocolAdapter {
                             if (zrle.skipped) continue;
                             if (usePipeline && zrle.decompressed) {
                                 this.pipeline!.processZrleTileData(zrle.decompressed, x, y, width, height, this.clientPixelFormat);
-                                rects.push({ kind: 'pipeline', x, y, width, height });
+                                rects.push({
+                                    kind: 'rgba',
+                                    x, y, width, height,
+                                    rgba: this.pipeline!.readFramebufferRect(x, y, width, height),
+                                });
                             } else {
                                 rects.push({ kind: 'rgba', x, y, width, height, rgba: zrle.rgba! });
                             }
@@ -964,17 +1085,23 @@ export class VncRemoteDisplayProtocol implements RemoteDisplayProtocolAdapter {
                         }
 
                         if (encoding === 5) {
-                            const hextile = parseHextileRect(this.buffer, offset, width, height, this.clientPixelFormat, this.decodeRawRect);
+                            const hextile = usePipeline
+                                ? measureHextileRect(data, offset, width, height, this.clientPixelFormat)
+                                : parseHextileRect(data, offset, width, height, this.clientPixelFormat, this.decodeRawRect);
                             if (!hextile) {
                                 incomplete = true;
                                 break;
                             }
                             if (usePipeline) {
-                                const hextileData = this.buffer.slice(offset, offset + hextile.consumed);
+                                const hextileData = data.subarray(offset, offset + hextile.consumed);
                                 this.pipeline!.processHextileRect(hextileData, x, y, width, height, this.clientPixelFormat);
-                                rects.push({ kind: 'pipeline', x, y, width, height });
+                                rects.push({
+                                    kind: 'rgba',
+                                    x, y, width, height,
+                                    rgba: this.pipeline!.readFramebufferRect(x, y, width, height),
+                                });
                             } else {
-                                rects.push({ kind: 'rgba', x, y, width, height, rgba: hextile.rgba });
+                                rects.push({ kind: 'rgba', x, y, width, height, rgba: (hextile as HextileRectResult).rgba });
                             }
                             offset += hextile.consumed;
                             continue;
@@ -992,36 +1119,33 @@ export class VncRemoteDisplayProtocol implements RemoteDisplayProtocolAdapter {
                         throw new Error(`Unsupported VNC rectangle encoding ${encoding}. This viewer currently supports ZRLE, Hextile, RRE, CopyRect, raw rectangles, and DesktopSize only.`);
                     }
                     if (incomplete) break;
-                    this.consume(offset);
+                    this.readOffset += offset;
 
-                    const event: RemoteDisplayProtocolEvent & { framebuffer?: Uint8ClampedArray } = {
+                    const event: RemoteDisplayProtocolEvent = {
                         type: 'framebuffer-update',
                         protocol: PROTOCOL,
                         width: this.framebufferWidth,
                         height: this.framebufferHeight,
                         rects,
                     };
-                    if (usePipeline) {
-                        (event as { framebuffer?: Uint8ClampedArray }).framebuffer = this.pipeline!.getFramebuffer();
-                    }
                     events.push(event);
                     outgoing.push(buildFramebufferUpdateRequest(true, this.framebufferWidth, this.framebufferHeight));
                     progressed = true;
                     continue;
                 }
                 if (type === 2) {
-                    this.consume(1);
+                    this.readOffset += 1;
                     events.push({ type: 'bell', protocol: PROTOCOL });
                     progressed = true;
                     continue;
                 }
                 if (type === 3) {
-                    if (this.buffer.byteLength < 8) break;
-                    const view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
-                    const length = view.getUint32(4, false);
-                    if (this.buffer.byteLength < 8 + length) break;
-                    this.consume(8);
-                    const text = bytesToAscii(this.consume(length));
+                    if (data.byteLength < 8) break;
+                    const clipView = new DataView(data.buffer, data.byteOffset, data.byteLength);
+                    const length = clipView.getUint32(4, false);
+                    if (data.byteLength < 8 + length) break;
+                    const text = bytesToAscii(data.subarray(8, 8 + length));
+                    this.readOffset += 8 + length;
                     events.push({ type: 'clipboard', protocol: PROTOCOL, text });
                     progressed = true;
                     continue;
@@ -1032,9 +1156,40 @@ export class VncRemoteDisplayProtocol implements RemoteDisplayProtocolAdapter {
         return { events, outgoing };
     }
 
+    private get available(): number {
+        return this.writeOffset - this.readOffset;
+    }
+
     private consume(length: number): Uint8Array {
-        const chunk = this.buffer.slice(0, length);
-        this.buffer = this.buffer.slice(length);
-        return chunk;
+        const start = this.readOffset;
+        this.readOffset += length;
+        return this.buffer.subarray(start, this.readOffset);
+    }
+
+    private appendToBuffer(chunk: Uint8Array): void {
+        const chunkLen = chunk.byteLength;
+        if (chunkLen === 0) return;
+
+        const freeAtEnd = this.buffer.byteLength - this.writeOffset;
+        if (chunkLen > freeAtEnd) {
+            const unread = this.writeOffset - this.readOffset;
+            if (unread > 0) {
+                this.buffer.copyWithin(0, this.readOffset, this.writeOffset);
+            }
+            this.readOffset = 0;
+            this.writeOffset = unread;
+
+            if (chunkLen > this.buffer.byteLength - this.writeOffset) {
+                const newSize = Math.max((this.writeOffset + chunkLen) * 2, 65536);
+                const newBuf = new Uint8Array(newSize);
+                if (this.writeOffset > 0) {
+                    newBuf.set(this.buffer.subarray(0, this.writeOffset));
+                }
+                this.buffer = newBuf;
+            }
+        }
+
+        this.buffer.set(chunk, this.writeOffset);
+        this.writeOffset += chunkLen;
     }
 }

@@ -61,6 +61,8 @@ const REQUIRED_EXPORTS = [
 ] as const;
 
 let pipelinePromise: Promise<WasmDisplayPipeline | null> | null = null;
+const GC_INTERVAL_MS = 1000;
+const GC_PENDING_BYTES_THRESHOLD = 4 * 1024 * 1024;
 
 function normalizeInput(bytes: Uint8Array | ArrayBuffer): ArrayBuffer {
     if (bytes instanceof ArrayBuffer) return bytes;
@@ -79,6 +81,7 @@ function callProcess(
     w: number,
     h: number,
     pf: RemoteDisplayPixelFormat,
+    afterProcess?: (weight: number) => void,
 ): number {
     const input = normalizeInput(data);
     const ptr = ex.__pin(ex.__newArrayBuffer(input));
@@ -93,7 +96,7 @@ function callProcess(
         );
     } finally {
         ex.__unpin(ptr);
-        try { ex.__collect(); } catch {}
+        afterProcess?.(input.byteLength);
     }
 }
 
@@ -111,6 +114,19 @@ export async function loadRemoteDisplayWasmDecoder(
                 ? await loader.instantiateStreaming<DecoderExports>(response, {})
                 : await loader.instantiate<DecoderExports>(await response.arrayBuffer(), {});
             const ex = instantiated.exports as DecoderExports;
+            let pendingGcBytes = 0;
+            let lastGcAt = Date.now();
+
+            const maybeCollect = (weight: number = 0) => {
+                pendingGcBytes += weight;
+                const now = Date.now();
+                if (pendingGcBytes < GC_PENDING_BYTES_THRESHOLD && now - lastGcAt < GC_INTERVAL_MS) {
+                    return;
+                }
+                pendingGcBytes = 0;
+                lastGcAt = now;
+                try { ex.__collect?.(); } catch {}
+            };
 
             for (const fn of REQUIRED_EXPORTS) {
                 if (typeof ex[fn] !== 'function') throw new Error(`${fn} export is missing.`);
@@ -121,16 +137,31 @@ export async function loadRemoteDisplayWasmDecoder(
                     ex.initFramebuffer(width, height);
                 },
 
-                getFramebuffer(): Uint8ClampedArray {
+                readFramebufferRect(x: number, y: number, width: number, height: number): Uint8ClampedArray {
+                    const fbWidth = ex.getFramebufferWidth();
+                    const fbHeight = ex.getFramebufferHeight();
+                    const startX = Math.max(0, Math.min(fbWidth, Math.floor(x)));
+                    const startY = Math.max(0, Math.min(fbHeight, Math.floor(y)));
+                    const copyWidth = Math.max(0, Math.min(Math.floor(width), fbWidth - startX));
+                    const copyHeight = Math.max(0, Math.min(Math.floor(height), fbHeight - startY));
+                    if (copyWidth === 0 || copyHeight === 0) {
+                        return new Uint8ClampedArray(0);
+                    }
                     const ptr = ex.getFramebufferPtr();
-                    const len = ex.getFramebufferLen();
-                    return new Uint8ClampedArray(
-                        new Uint8Array(ex.memory.buffer, ptr, len).slice().buffer,
-                    );
+                    const framebuffer = new Uint8Array(ex.memory.buffer, ptr, ex.getFramebufferLen());
+                    const rowBytes = copyWidth * 4;
+                    const stride = fbWidth * 4;
+                    const region = new Uint8ClampedArray(copyWidth * copyHeight * 4);
+                    for (let row = 0; row < copyHeight; row += 1) {
+                        const srcStart = ((startY + row) * stride) + (startX * 4);
+                        const dstStart = row * rowBytes;
+                        region.set(framebuffer.subarray(srcStart, srcStart + rowBytes), dstStart);
+                    }
+                    return region;
                 },
 
                 processRawRect(data: Uint8Array, x: number, y: number, w: number, h: number, pf: RemoteDisplayPixelFormat): void {
-                    callProcess(ex, 'processRawRect', data, x, y, w, h, pf);
+                    callProcess(ex, 'processRawRect', data, x, y, w, h, pf, maybeCollect);
                 },
 
                 processCopyRect(dstX: number, dstY: number, w: number, h: number, srcX: number, srcY: number): void {
@@ -138,15 +169,15 @@ export async function loadRemoteDisplayWasmDecoder(
                 },
 
                 processRreRect(data: Uint8Array, x: number, y: number, w: number, h: number, pf: RemoteDisplayPixelFormat): void {
-                    callProcess(ex, 'processRreRect', data, x, y, w, h, pf);
+                    callProcess(ex, 'processRreRect', data, x, y, w, h, pf, maybeCollect);
                 },
 
                 processHextileRect(data: Uint8Array, x: number, y: number, w: number, h: number, pf: RemoteDisplayPixelFormat): void {
-                    callProcess(ex, 'processHextileRect', data, x, y, w, h, pf);
+                    callProcess(ex, 'processHextileRect', data, x, y, w, h, pf, maybeCollect);
                 },
 
                 processZrleTileData(data: Uint8Array, x: number, y: number, w: number, h: number, pf: RemoteDisplayPixelFormat): void {
-                    callProcess(ex, 'processZrleTileData', data, x, y, w, h, pf);
+                    callProcess(ex, 'processZrleTileData', data, x, y, w, h, pf, maybeCollect);
                 },
 
                 decodeRawRectToRgba(data: Uint8Array, width: number, height: number, pf: RemoteDisplayPixelFormat): Uint8ClampedArray {
@@ -166,7 +197,7 @@ export async function loadRemoteDisplayWasmDecoder(
                         } finally { ex.__unpin(outputPtr); }
                     } finally {
                         ex.__unpin(inputPtr);
-                        try { ex.__collect?.(); } catch {}
+                        maybeCollect(input.byteLength + (width * height * 4));
                     }
                 },
             };

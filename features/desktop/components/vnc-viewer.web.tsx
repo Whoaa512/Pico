@@ -55,19 +55,10 @@ export function VncViewer({
             updateCanvasScale();
         }
 
-        const hasPipelineRects = event.rects.some((r) => r.kind === 'pipeline');
-
-        if (event.framebuffer && hasPipelineRects) {
-            const buf = new Uint8ClampedArray(event.framebuffer.buffer.slice(0) as ArrayBuffer);
-            const img = new ImageData(buf, event.width, event.height);
-            ctx.putImageData(img, 0, 0);
-            return;
-        }
-
         for (const rect of event.rects) {
             if (rect.kind === 'rgba') {
-                const buf = new Uint8ClampedArray(rect.rgba.buffer.slice(0) as ArrayBuffer);
-                const img = new ImageData(buf, rect.width, rect.height);
+                const view = new Uint8ClampedArray(rect.rgba.buffer, rect.rgba.byteOffset, rect.rgba.byteLength);
+                const img = new ImageData(view, rect.width, rect.height);
                 ctx.putImageData(img, rect.x, rect.y);
             } else if (rect.kind === 'copy') {
                 const data = ctx.getImageData(rect.srcX, rect.srcY, rect.width, rect.height);

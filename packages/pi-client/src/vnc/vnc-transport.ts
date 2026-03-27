@@ -69,6 +69,8 @@ export class WebSocketRemoteDisplayBoundary {
     private readonly options: RemoteDisplaySocketBoundaryOptions;
     private bytesIn = 0;
     private bytesOut = 0;
+    private metricsTimer: ReturnType<typeof setTimeout> | null = null;
+    private metricsDirty = false;
 
     constructor(options: RemoteDisplaySocketBoundaryOptions) {
         this.options = options;
@@ -139,11 +141,24 @@ export class WebSocketRemoteDisplayBoundary {
     dispose(): void {
         if (this.disposed) return;
         this.disposed = true;
+        if (this.metricsTimer) {
+            clearTimeout(this.metricsTimer);
+            this.metricsTimer = null;
+        }
+        this.options.onMetrics?.(this.getMetrics());
         try { this.socket?.close?.(); } catch {}
         this.socket = null;
     }
 
     private emitMetrics(): void {
-        this.options.onMetrics?.(this.getMetrics());
+        this.metricsDirty = true;
+        if (this.metricsTimer) return;
+        this.metricsTimer = setTimeout(() => {
+            this.metricsTimer = null;
+            if (this.metricsDirty && !this.disposed) {
+                this.metricsDirty = false;
+                this.options.onMetrics?.(this.getMetrics());
+            }
+        }, 1000);
     }
 }
