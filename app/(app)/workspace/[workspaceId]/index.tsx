@@ -17,9 +17,11 @@ import { PromptInput } from "@/features/workspace/components/prompt-input";
 import { WorkspaceHero } from "@/features/workspace/components/workspace-hero";
 import { WorkspaceSidebar } from "@/features/workspace/components/workspace-sidebar";
 import { WorkspaceRightPane } from "@/features/preview/components/workspace-right-pane";
+import { ModePickerDialog } from "@/features/workspace/components/mode-picker-dialog";
 import { useWorkspaceStore } from "@/features/workspace/store";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import { usePiClient } from "@pi-ui/client";
+import { usePiClient, useAgentModes } from "@pi-ui/client";
+import type { AgentMode } from "@pi-ui/client";
 import { requestBrowserNotificationPermission } from "@/features/agent/browser-notifications";
 
 export default function WorkspaceScreen() {
@@ -35,9 +37,14 @@ export default function WorkspaceScreen() {
   const clearWorkspaceNotification = useWorkspaceStore(
     (s) => s.clearWorkspaceNotification,
   );
+  const { modes: rawModes, loaded: modesLoaded } = useAgentModes();
+  const modes = Array.isArray(rawModes) ? rawModes : [];
   const [alertMessage, setAlertMessage] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [preSessionId, setPreSessionId] = useState<string | null>(null);
+  const [showModePicker, setShowModePicker] = useState(false);
+  const [selectedModeId, setSelectedModeId] = useState<string | undefined>(undefined);
+  const [modeResolved, setModeResolved] = useState(false);
   const pendingRef = useRef<Promise<{ session_id: string }> | null>(null);
   const currentWorkspaceRef = useRef<string | null>(workspaceId ?? null);
 
@@ -52,8 +59,31 @@ export default function WorkspaceScreen() {
     currentWorkspaceRef.current = workspaceId ?? null;
     setPreSessionId(null);
     setSending(false);
+    setSelectedModeId(undefined);
+    setModeResolved(false);
     pendingRef.current = null;
   }, [workspaceId]);
+
+  useEffect(() => {
+    if (!modesLoaded || modeResolved) return;
+    if (modes.length > 0) {
+      setShowModePicker(true);
+    } else {
+      setModeResolved(true);
+    }
+  }, [modesLoaded, modes.length, modeResolved]);
+
+  const handleModeSelected = useCallback((mode: AgentMode) => {
+    setSelectedModeId(mode.id);
+    setShowModePicker(false);
+    setModeResolved(true);
+  }, []);
+
+  const handleModeSkipped = useCallback(() => {
+    setSelectedModeId(undefined);
+    setShowModePicker(false);
+    setModeResolved(true);
+  }, []);
 
   const ensureSession = useCallback(
     async (targetWorkspaceId: string): Promise<string> => {
@@ -64,7 +94,10 @@ export default function WorkspaceScreen() {
         return info.session_id;
       }
 
-      const promise = client.createAgentSession({ workspaceId: targetWorkspaceId });
+      const promise = client.createAgentSession({
+        workspaceId: targetWorkspaceId,
+        modeId: selectedModeId,
+      });
       pendingRef.current = promise;
 
       try {
@@ -79,13 +112,13 @@ export default function WorkspaceScreen() {
         }
       }
     },
-    [client, preSessionId],
+    [client, preSessionId, selectedModeId],
   );
 
   useEffect(() => {
-    if (!workspaceId || preSessionId) return;
+    if (!workspaceId || preSessionId || !modeResolved) return;
     void ensureSession(workspaceId).catch(() => {});
-  }, [ensureSession, preSessionId, workspaceId]);
+  }, [ensureSession, preSessionId, workspaceId, modeResolved]);
 
   const handleSend = useCallback(
     async (text: string) => {
@@ -143,6 +176,12 @@ export default function WorkspaceScreen() {
         },
       ]}
     >
+      <ModePickerDialog
+        visible={showModePicker}
+        modes={modes}
+        onSelect={handleModeSelected}
+        onSkip={handleModeSkipped}
+      />
       <View style={styles.upperRow}>
         <View style={[styles.editorColumn, { backgroundColor: editorBg }]}>
           {sending ? (
