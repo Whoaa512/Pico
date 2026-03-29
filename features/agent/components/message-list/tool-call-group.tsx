@@ -8,6 +8,7 @@ import type { ToolCallInfo } from "../../types";
 import { getToolStatusLabel, isToolCallActive } from "./tool-call-utils";
 import {
   MAX_VISIBLE_GROUP_ITEMS,
+  MULTI_GROUP_PARTS,
   formatSingleCall,
   multiGroupLabelParts,
   sharedStyles as styles,
@@ -160,17 +161,18 @@ function ToolCallGroupComponent({
   const groupStatusLabel = activeCall ? getToolStatusLabel(activeCall) : null;
 
   const seenIdsRef = useRef(new Set<string>());
-  const anim = useExpandAnimation();
+  const anim = useExpandAnimation({ initialExpanded: calls.length <= 1 });
 
   useEffect(() => {
-    if (groupStatusLabel && !anim.expanded) anim.expand();
-  }, [groupStatusLabel, anim.expanded, anim.expand]);
+    if (groupStatusLabel && !anim.expanded) anim.expandSilent();
+  }, [groupStatusLabel, anim.expanded, anim.expandSilent]);
 
   const [showAll, setShowAll] = useState(false);
   const showMoreAnim = useExpandAnimation();
   const mutedColor = isDark ? "#888" : "#888";
 
-  if (calls.length === 1) {
+  const hasGroupLabel = !!MULTI_GROUP_PARTS[toolName];
+  if (calls.length === 1 && (!hasGroupLabel || NEVER_GROUP.has(toolName))) {
     return <SingleToolCall tc={calls[0]} />;
   }
 

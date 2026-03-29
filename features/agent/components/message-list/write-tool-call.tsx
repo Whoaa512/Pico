@@ -48,8 +48,8 @@ export function WriteToolCall({ tc }: { tc: ToolCallInfo }) {
   const anim = useExpandAnimation({ initialExpanded: showInlinePreview && isRunning });
 
   useEffect(() => {
-    if (showInlinePreview && isRunning && !anim.expanded) anim.expand();
-  }, [showInlinePreview, isRunning, anim.expanded, anim.expand]);
+    if (showInlinePreview && isRunning && !anim.expanded) anim.expandSilent();
+  }, [showInlinePreview, isRunning, anim.expanded, anim.expandSilent]);
 
   const shouldRenderPreview = showInlinePreview && anim.expanded && isVisible;
   const previewRows = useMemo(

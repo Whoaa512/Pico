@@ -27,8 +27,8 @@ export function ReadToolCall({ tc }: { tc: ToolCallInfo }) {
   const anim = useExpandAnimation();
 
   useEffect(() => {
-    if (isRunning && !anim.expanded) anim.expand();
-  }, [isRunning, anim.expanded, anim.expand]);
+    if (isRunning && !anim.expanded) anim.expandSilent();
+  }, [isRunning, anim.expanded, anim.expandSilent]);
 
   const parsed = parseToolArguments(tc.arguments);
   const path = parsed.path ?? "";

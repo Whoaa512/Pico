@@ -56,8 +56,8 @@ export function useExpandAnimation(options?: UseExpandAnimationOptions) {
     [measuredHeight, startExpandAnimation],
   );
 
-  const expand = useCallback(() => {
-    if (!IS_WEB) animateLayoutNative();
+  const expand = useCallback((withLayoutAnim = true) => {
+    if (!IS_WEB && withLayoutAnim) animateLayoutNative();
     setShouldRender(true);
     setExpanded(true);
     chevronRotation.value = withTiming(1, {
@@ -74,6 +74,8 @@ export function useExpandAnimation(options?: UseExpandAnimationOptions) {
       progress.value = 1;
     }
   }, [chevronRotation, measuredHeight, startExpandAnimation, progress]);
+
+  const expandSilent = useCallback(() => expand(false), [expand]);
 
   const collapse = useCallback(() => {
     if (!IS_WEB) animateLayoutNative();
@@ -128,6 +130,7 @@ export function useExpandAnimation(options?: UseExpandAnimationOptions) {
     expanded,
     shouldRender,
     expand,
+    expandSilent,
     collapse,
     toggle,
     onMeasure,
