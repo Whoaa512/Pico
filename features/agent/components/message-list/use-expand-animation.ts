@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from "react";
+import { LayoutAnimation, Platform } from "react-native";
 import {
   useAnimatedStyle,
   useSharedValue,
@@ -9,6 +10,17 @@ import {
 
 const EXPAND_DURATION = 280;
 const EXPAND_EASING = Easing.out(Easing.cubic);
+const IS_WEB = Platform.OS === "web";
+
+const NATIVE_ANIM = LayoutAnimation.create(
+  200,
+  LayoutAnimation.Types.easeInEaseOut,
+  LayoutAnimation.Properties.opacity,
+);
+
+function animateLayoutNative() {
+  LayoutAnimation.configureNext(NATIVE_ANIM);
+}
 
 interface UseExpandAnimationOptions {
   initialExpanded?: boolean;
@@ -41,39 +53,50 @@ export function useExpandAnimation(options?: UseExpandAnimationOptions) {
         measuredHeight.value = height;
       }
     },
-    [measuredHeight, progress, startExpandAnimation],
+    [measuredHeight, startExpandAnimation],
   );
 
   const expand = useCallback(() => {
+    if (!IS_WEB) animateLayoutNative();
     setShouldRender(true);
     setExpanded(true);
     chevronRotation.value = withTiming(1, {
       duration: 200,
       easing: EXPAND_EASING,
     });
-    if (measuredHeight.value > 0) {
-      startExpandAnimation();
+    if (IS_WEB) {
+      if (measuredHeight.value > 0) {
+        startExpandAnimation();
+      } else {
+        pendingExpand.current = true;
+      }
     } else {
-      pendingExpand.current = true;
+      progress.value = 1;
     }
-  }, [chevronRotation, measuredHeight, startExpandAnimation]);
+  }, [chevronRotation, measuredHeight, startExpandAnimation, progress]);
 
   const collapse = useCallback(() => {
+    if (!IS_WEB) animateLayoutNative();
     setExpanded(false);
     pendingExpand.current = false;
-    progress.value = withTiming(
-      0,
-      { duration: EXPAND_DURATION, easing: EXPAND_EASING },
-      (finished) => {
-        if (finished) {
-          runOnJS(setShouldRender)(false);
-        }
-      },
-    );
     chevronRotation.value = withTiming(0, {
       duration: 200,
       easing: EXPAND_EASING,
     });
+    if (IS_WEB) {
+      progress.value = withTiming(
+        0,
+        { duration: EXPAND_DURATION, easing: EXPAND_EASING },
+        (finished) => {
+          if (finished) {
+            runOnJS(setShouldRender)(false);
+          }
+        },
+      );
+    } else {
+      progress.value = 0;
+      setShouldRender(false);
+    }
   }, [progress, chevronRotation]);
 
   const toggle = useCallback(() => {
@@ -82,6 +105,9 @@ export function useExpandAnimation(options?: UseExpandAnimationOptions) {
   }, [expanded, expand, collapse]);
 
   const containerStyle = useAnimatedStyle(() => {
+    if (!IS_WEB) {
+      return {};
+    }
     const h = measuredHeight.value;
     const p = progress.value;
     if (p >= 0.99) {

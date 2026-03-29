@@ -1,6 +1,8 @@
 import { type ReactNode, useCallback, useRef } from "react";
-import { StyleSheet, View } from "react-native";
+import { Platform, StyleSheet, View } from "react-native";
 import Animated from "react-native-reanimated";
+
+const IS_WEB = Platform.OS === "web";
 
 interface ExpandableContentProps {
   shouldRender: boolean;
@@ -29,6 +31,10 @@ export function ExpandableContent({
   );
 
   if (!shouldRender) return null;
+
+  if (!IS_WEB) {
+    return <View>{children}</View>;
+  }
 
   return (
     <View>

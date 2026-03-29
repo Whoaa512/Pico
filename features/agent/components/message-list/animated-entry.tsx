@@ -1,6 +1,7 @@
 import { type ReactNode, useCallback, useRef, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { Platform, StyleSheet, View } from "react-native";
 import Animated, {
+  FadeIn,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
@@ -8,7 +9,10 @@ import Animated, {
 } from "react-native-reanimated";
 
 const DURATION = 280;
-const EASING = Easing.out(Easing.cubic);
+const EASING_FN = Easing.out(Easing.cubic);
+const IS_WEB = Platform.OS === "web";
+
+const NATIVE_ENTER = FadeIn.duration(200);
 
 interface AnimatedEntryProps {
   children: ReactNode;
@@ -41,7 +45,7 @@ export function AnimatedEntry({ children, enabled = true }: AnimatedEntryProps) 
         hasMeasured.current = true;
         measuredHeight.value = h;
         setMeasured(true);
-        progress.value = withTiming(1, { duration: DURATION, easing: EASING });
+        progress.value = withTiming(1, { duration: DURATION, easing: EASING_FN });
       }
     },
     [measuredHeight, progress],
@@ -58,6 +62,14 @@ export function AnimatedEntry({ children, enabled = true }: AnimatedEntryProps) 
   );
 
   if (!enabled) return <>{children}</>;
+
+  if (!IS_WEB) {
+    return (
+      <Animated.View entering={NATIVE_ENTER}>
+        {children}
+      </Animated.View>
+    );
+  }
 
   return (
     <View>
