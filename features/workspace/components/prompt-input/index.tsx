@@ -293,10 +293,14 @@ export function PromptInput({
   useEffect(() => {
     if (Platform.OS !== "web" || inputDisabled) return;
     const handler = (e: KeyboardEvent) => {
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
       if ((e.target as HTMLElement)?.isContentEditable) return;
+      if ((e.metaKey || e.ctrlKey) && (e.key === "v" || e.key === "V")) {
+        inputRef.current?.focus();
+        return;
+      }
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key.length !== 1) return;
       inputRef.current?.focus();
     };
