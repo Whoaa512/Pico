@@ -146,17 +146,32 @@ detect_arch() {
 # ── GitHub API ───────────────────────────────────────────────────────────────
 
 fetch_latest_tag() {
+  local os="$1" arch="$2"
+  local artifact="pi-server-${os}-${arch}"
+
   local response
   response="$(curl -fsSL -H "Accept: application/vnd.github.v3+json" \
-    "${GITHUB_API}/releases/latest" 2>/dev/null)" \
+    "${GITHUB_API}/releases?per_page=5" 2>/dev/null)" \
     || fatal "Failed to fetch release info from GitHub. Check your internet connection."
 
-  local tag
-  tag="$(printf '%s' "$response" | grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' \
-    | head -1 | sed 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')"
+  local tags
+  tags="$(printf '%s' "$response" | grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' \
+    | sed 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')"
 
-  [ -n "$tag" ] || fatal "Could not determine the latest release tag.\n         Check ${GITHUB_RELEASES} manually."
-  echo "$tag"
+  [ -n "$tags" ] || fatal "Could not determine any release tags.\n         Check ${GITHUB_RELEASES} manually."
+
+  for tag in $tags; do
+    local url="${GITHUB_RELEASES}/download/${tag}/${artifact}"
+    local http_code
+    http_code="$(curl -fsSL -o /dev/null -w "%{http_code}" --head "$url" 2>/dev/null)" || true
+    if [ "$http_code" = "200" ] || [ "$http_code" = "302" ]; then
+      echo "$tag"
+      return
+    fi
+    dim "  ${tag} has no binary yet, checking previous release..."
+  done
+
+  fatal "No release found with a binary for your platform (${os}/${arch}).\n         Builds may still be in progress. Try again in a few minutes."
 }
 
 get_download_url() {
@@ -634,7 +649,7 @@ do_install() {
   # Fetch latest version
   info "Checking latest release..."
   local tag
-  tag="$(fetch_latest_tag)"
+  tag="$(fetch_latest_tag "$os" "$arch")"
   info "Latest version: ${BOLD}${tag}${RESET}"
 
   # Check existing installation
