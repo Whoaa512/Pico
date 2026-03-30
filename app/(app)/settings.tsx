@@ -330,11 +330,6 @@ function AboutSection({
             {serverVersion || '—'}
           </Text>
         }
-      />
-      <SettingsRow
-        label="Licenses"
-        isDark={isDark}
-        onPress={() => {}}
         isLast
       />
     </SettingsSection>
