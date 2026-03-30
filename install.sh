@@ -22,6 +22,7 @@ GITHUB_RELEASES="https://github.com/${REPO}/releases"
 
 INSTALL_DIR="${HOME}/.pi/ui"
 BINARY="pi-server"
+WRAPPER="pi-server-wrapper.sh"
 
 SYSTEMD_UNIT_DIR="${HOME}/.config/systemd/user"
 SYSTEMD_SERVICE="pi-server.service"
@@ -223,7 +224,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=${bin}
+ExecStart=${INSTALL_DIR}/${WRAPPER}
 WorkingDirectory=${INSTALL_DIR}
 Restart=on-failure
 RestartSec=5
@@ -289,7 +290,7 @@ install_launchd() {
 
   <key>ProgramArguments</key>
   <array>
-    <string>${bin}</string>
+    <string>${INSTALL_DIR}/${WRAPPER}</string>
   </array>
 
   <key>WorkingDirectory</key>
@@ -457,6 +458,31 @@ add_to_path() {
   fi
 }
 
+# ── Wrapper script (for service env) ────────────────────────────────────────
+
+create_wrapper_script() {
+  local bin="${INSTALL_DIR}/${BINARY}"
+  local wrapper="${INSTALL_DIR}/${WRAPPER}"
+  local user_shell
+  user_shell="$(basename "${SHELL:-/bin/bash}")"
+  local shell_path
+  shell_path="${SHELL:-/bin/bash}"
+
+  if [ "$user_shell" = "fish" ]; then
+    cat > "$wrapper" <<EOF
+#!/usr/bin/env bash
+exec ${shell_path} -lc "exec ${bin}"
+EOF
+  else
+    cat > "$wrapper" <<EOF
+#!/usr/bin/env bash
+exec ${shell_path} -lc 'exec "\$1"' _ "${bin}"
+EOF
+  fi
+
+  chmod +x "$wrapper"
+}
+
 # ── Uninstall ────────────────────────────────────────────────────────────────
 
 do_uninstall() {
@@ -560,6 +586,9 @@ do_install() {
       info "Run 'cd ${INSTALL_DIR} && ./${BINARY} init' to set up credentials."
     fi
   fi
+
+  # Generate wrapper script that sources user shell env
+  create_wrapper_script
 
   # Service setup
   if ! "$OPT_NO_SERVICE"; then
