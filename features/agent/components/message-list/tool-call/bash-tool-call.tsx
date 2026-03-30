@@ -3,12 +3,12 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Colors, Fonts } from "@/constants/theme";
 import type { ToolCallInfo } from "../../../types";
 import { isToolActive, parseToolArguments, truncateOutput } from "../utils";
-import { ToolStatusDot } from "./tool-status-dot";
 import { AnimatedCollapse } from "../animated-collapse";
 
 interface BashToolCallProps {
   tc: ToolCallInfo;
   isDark: boolean;
+  turnCompleted?: boolean;
 }
 
 const OUTPUT_MAX_HEIGHT = 220;
@@ -16,15 +16,26 @@ const OUTPUT_MAX_HEIGHT = 220;
 export const BashToolCall = memo(function BashToolCall({
   tc,
   isDark,
+  turnCompleted = false,
 }: BashToolCallProps) {
   const colors = isDark ? Colors.dark : Colors.light;
   const active = isToolActive(tc);
-  const [expanded, setExpanded] = useState(() => isToolActive(tc));
+  const [expanded, setExpanded] = useState(() => isToolActive(tc) || (!turnCompleted && tc.status === "complete"));
   const scrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
     if (active) setExpanded(true);
   }, [active]);
+
+  const prevTurnCompleted = useRef(turnCompleted);
+  useEffect(() => {
+    const justCompleted = turnCompleted && !prevTurnCompleted.current;
+    prevTurnCompleted.current = turnCompleted;
+    if (justCompleted && !active) {
+      const timer = setTimeout(() => setExpanded(false), 400);
+      return () => clearTimeout(timer);
+    }
+  }, [turnCompleted, active]);
 
   useEffect(() => {
     if (active && scrollRef.current) {
@@ -46,7 +57,6 @@ export const BashToolCall = memo(function BashToolCall({
   return (
     <View>
       <Pressable onPress={toggle} style={styles.header}>
-        <ToolStatusDot status={tc.status} />
         <Text style={[styles.ranLabel, { color: colors.textSecondary }]} numberOfLines={1}>Ran <Text style={[styles.command, { color: colors.text }]}>{command || "bash"}</Text>{cdPath ? <Text> in <Text style={[styles.command, { color: colors.text }]}>{cdPath}</Text></Text> : null}</Text>
       </Pressable>
       <AnimatedCollapse expanded={expanded} maxHeight={280}>

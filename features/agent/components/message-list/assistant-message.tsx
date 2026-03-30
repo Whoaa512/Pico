@@ -23,12 +23,14 @@ interface AssistantMessageProps {
   message: ChatMessage;
   isDark: boolean;
   toolCallsOverride?: ChatMessage["toolCalls"];
+  sessionStreaming?: boolean;
 }
 
 export const AssistantMessage = memo(function AssistantMessage({
   message,
   isDark,
   toolCallsOverride,
+  sessionStreaming = false,
 }: AssistantMessageProps) {
   const colorScheme = useColorScheme() ?? "light";
   const colors = Colors[colorScheme];
@@ -47,6 +49,7 @@ export const AssistantMessage = memo(function AssistantMessage({
   const isStreaming = !!message.isStreaming;
   const isThinkingOnly = hasThinking && !hasText && !hasToolCalls && isStreaming;
   const isMidTurn = message.stopReason === "toolUse";
+  const turnCompleted = !sessionStreaming;
   const showToolbar = !isStreaming && !isMidTurn && (!!message.text || !!message.errorMessage);
 
   const [hovered, setHovered] = useState(false);
@@ -73,7 +76,7 @@ export const AssistantMessage = memo(function AssistantMessage({
       {hasText && <View style={styles.textBlock}>{elements}</View>}
 
       {hasToolCalls && (
-        <ToolCallGroup toolCalls={toolCalls!} isDark={isDark} />
+        <ToolCallGroup toolCalls={toolCalls!} isDark={isDark} turnCompleted={turnCompleted} />
       )}
 
       {hasError && (
@@ -254,24 +257,20 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 16,
     paddingVertical: 4,
+    gap: 8,
   },
-  textBlock: {
-    marginBottom: 2,
-  },
+  textBlock: {},
   errorBlock: {
     borderRadius: 6,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    marginTop: 4,
   },
   errorText: {
     fontSize: 12,
     lineHeight: 18,
     fontFamily: Fonts.sans,
   },
-  toolbar: {
-    marginTop: 4,
-  },
+  toolbar: {},
   toolbarBtns: {
     flexDirection: "row",
     alignItems: "center",

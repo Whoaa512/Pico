@@ -9,6 +9,7 @@ interface SlashCommandDropdownProps {
   commands: SlashCommand[];
   selectedIndex: number;
   dropdownAnim: Animated.Value;
+  overlay?: boolean;
   onSelect: (command: SlashCommand) => void;
 }
 
@@ -16,6 +17,7 @@ export function SlashCommandDropdown({
   commands,
   selectedIndex,
   dropdownAnim,
+  overlay = false,
   onSelect,
 }: SlashCommandDropdownProps) {
   const theme = usePromptTheme();
@@ -29,6 +31,7 @@ export function SlashCommandDropdown({
     <Animated.View
       style={[
         styles.container,
+        overlay ? styles.overlayContainer : styles.stackedContainer,
         {
           backgroundColor: theme.dropdownBg,
           borderColor: theme.dropdownBorder,
@@ -41,6 +44,11 @@ export function SlashCommandDropdown({
               }),
             },
           ],
+          ...(overlay
+            ? {
+                boxShadow: '0px 10px 30px rgba(0, 0, 0, 0.14)',
+              }
+            : {}),
         },
       ]}
     >
@@ -82,12 +90,24 @@ export function SlashCommandDropdown({
 
 const styles = StyleSheet.create({
   container: {
+    borderWidth: 0.633,
+    overflow: 'hidden',
+  },
+  stackedContainer: {
     borderTopLeftRadius: 12,
     borderTopRightRadius: 12,
-    borderWidth: 0.633,
     borderBottomWidth: 0,
-    overflow: 'hidden',
     zIndex: 2,
+  },
+  overlayContainer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: '100%',
+    marginBottom: 8,
+    borderRadius: 12,
+    zIndex: 20,
+    elevation: 12,
   },
   scroll: {
     maxHeight: 260,

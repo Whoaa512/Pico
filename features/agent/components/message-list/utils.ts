@@ -1,29 +1,60 @@
 import type { ToolCallInfo } from "../../types";
 
+function unescapeJsonString(s: string): string {
+  return s
+    .replace(/\\n/g, "\n")
+    .replace(/\\t/g, "\t")
+    .replace(/\\\\/g, "\\")
+    .replace(/\\"/g, '"');
+}
+
+function extractJsonStringValue(raw: string, key: string): string | undefined {
+  const keyPattern = new RegExp(`"${key}"\\s*:\\s*"`);
+  const match = keyPattern.exec(raw);
+  if (!match) return undefined;
+  let start = match.index + match[0].length;
+  let result = "";
+  let escaped = false;
+  for (let i = start; i < raw.length; i++) {
+    const ch = raw[i]!;
+    if (escaped) {
+      result += "\\" + ch;
+      escaped = false;
+    } else if (ch === "\\") {
+      escaped = true;
+    } else if (ch === '"') {
+      return unescapeJsonString(result);
+    } else {
+      result += ch;
+    }
+  }
+  return unescapeJsonString(result);
+}
+
 export function parseToolArguments(raw: string): Record<string, unknown> {
   if (!raw) return {};
   try {
     return JSON.parse(raw);
   } catch {
     const partial: Record<string, unknown> = {};
-    const pathMatch = raw.match(/"path"\s*:\s*"([^"]*)/);
-    if (pathMatch) partial.path = pathMatch[1];
-    const cmdMatch = raw.match(/"command"\s*:\s*"([^"]*)/);
-    if (cmdMatch) partial.command = cmdMatch[1];
-    const contentMatch = raw.match(/"content"\s*:\s*"([\s\S]*)/);
-    if (contentMatch) partial.content = contentMatch[1];
-    const oldTextMatch = raw.match(/"oldText"\s*:\s*"([\s\S]*?)(?:"\s*,|\s*$)/);
-    if (oldTextMatch) partial.oldText = oldTextMatch[1];
-    const newTextMatch = raw.match(/"newText"\s*:\s*"([\s\S]*?)(?:"\s*[,}]|\s*$)/);
-    if (newTextMatch) partial.newText = newTextMatch[1];
-    const queryMatch = raw.match(/"query"\s*:\s*"([^"]*)/);
-    if (queryMatch) partial.query = queryMatch[1];
-    const urlMatch = raw.match(/"url"\s*:\s*"([^"]*)/);
-    if (urlMatch) partial.url = urlMatch[1];
-    const agentMatch = raw.match(/"agent"\s*:\s*"([^"]*)/);
-    if (agentMatch) partial.agent = agentMatch[1];
-    const taskMatch = raw.match(/"task"\s*:\s*"([\s\S]*?)(?:"\s*[,}]|\s*$)/);
-    if (taskMatch) partial.task = taskMatch[1];
+    const path = extractJsonStringValue(raw, "path");
+    if (path !== undefined) partial.path = path;
+    const command = extractJsonStringValue(raw, "command");
+    if (command !== undefined) partial.command = command;
+    const content = extractJsonStringValue(raw, "content");
+    if (content !== undefined) partial.content = content;
+    const oldText = extractJsonStringValue(raw, "oldText");
+    if (oldText !== undefined) partial.oldText = oldText;
+    const newText = extractJsonStringValue(raw, "newText");
+    if (newText !== undefined) partial.newText = newText;
+    const query = extractJsonStringValue(raw, "query");
+    if (query !== undefined) partial.query = query;
+    const url = extractJsonStringValue(raw, "url");
+    if (url !== undefined) partial.url = url;
+    const agent = extractJsonStringValue(raw, "agent");
+    if (agent !== undefined) partial.agent = agent;
+    const task = extractJsonStringValue(raw, "task");
+    if (task !== undefined) partial.task = task;
     return partial;
   }
 }

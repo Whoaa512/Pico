@@ -24,16 +24,25 @@ interface MessageListProps {
   sessionId: string;
 }
 
+interface TurnFileStats {
+  filesEdited: number;
+  filesCreated: number;
+  linesAdded: number;
+  linesRemoved: number;
+}
+
 interface VisibleMessageItem {
   key: string;
   message: ChatMessage;
   toolCalls?: ToolCallInfo[];
   turnDurationMs?: number;
+  turnFileStats?: TurnFileStats;
 }
 
 function mergeConsecutiveToolCalls(
   messages: ChatMessage[],
   turnDurations: Map<string, number>,
+  turnFileStatsMap: Map<string, TurnFileStats>,
 ): VisibleMessageItem[] {
   const visible: VisibleMessageItem[] = [];
   let anchor: VisibleMessageItem | null = null;
@@ -46,6 +55,7 @@ function mergeConsecutiveToolCalls(
       (!!msg.thinking && msg.thinking.length > 0);
     const toolCalls = msg.toolCalls?.length ? msg.toolCalls : undefined;
     const turnDurationMs = turnDurations.get(msg.id);
+    const turnFileStats = turnFileStatsMap.get(msg.id);
 
     if (msg.role === "user" || msg.role === "system") {
       anchor = null;
@@ -59,6 +69,7 @@ function mergeConsecutiveToolCalls(
         message: msg,
         toolCalls,
         turnDurationMs,
+        turnFileStats,
       };
       anchor = msg.isStreaming ? null : item;
       visible.push(item);
@@ -70,6 +81,7 @@ function mergeConsecutiveToolCalls(
         ? [...anchor.toolCalls, ...toolCalls]
         : [...toolCalls];
       anchor.turnDurationMs = anchor.turnDurationMs ?? turnDurationMs;
+      anchor.turnFileStats = anchor.turnFileStats ?? turnFileStats;
     }
   }
 
@@ -87,7 +99,7 @@ export const MessageList = memo(function MessageList({
   const colorScheme = useColorScheme() ?? "light";
   const isDark = colorScheme === "dark";
   const colors = Colors[colorScheme];
-  const listRef = useRef<FlatList<ChatMessage>>(null);
+  const listRef = useRef<FlatList<VisibleMessageItem>>(null);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [autoFollow, setAutoFollow] = useState(true);
 
@@ -97,24 +109,64 @@ export const MessageList = memo(function MessageList({
 
   const prevMessageCountRef = useRef(messages.length);
 
-  const turnDurations = useMemo(() => {
-    const map = new Map<string, number>();
+  const { turnDurations, turnFileStatsMap } = useMemo(() => {
+    const durations = new Map<string, number>();
+    const fileStats = new Map<string, TurnFileStats>();
     let turnStartTs: number | null = null;
+    let turnStartIdx: number | null = null;
     for (let i = 0; i < messages.length; i++) {
       const msg = messages[i]!;
       if (msg.role === "user") {
         turnStartTs = msg.timestamp;
+        turnStartIdx = i;
       } else if (msg.role === "assistant" && msg.stopReason === "stop" && turnStartTs) {
-        map.set(msg.id, msg.timestamp - turnStartTs);
+        durations.set(msg.id, msg.timestamp - turnStartTs);
+        if (turnStartIdx !== null) {
+          const edited = new Set<string>();
+          const created = new Set<string>();
+          let linesAdded = 0;
+          let linesRemoved = 0;
+          for (let j = turnStartIdx; j <= i; j++) {
+            const tc = messages[j]!.toolCalls;
+            if (!tc) continue;
+            for (const call of tc) {
+              if (call.status !== "complete") continue;
+              let path = "";
+              try { path = (JSON.parse(call.arguments || "{}") as Record<string, unknown>).path as string || ""; } catch {}
+              if (!path) continue;
+              if (call.name === "edit") {
+                edited.add(path);
+                const diff = call.diff?.trim() || "";
+                if (diff) {
+                  for (const line of diff.split("\n")) {
+                    if (/^\+(?!\+)/.test(line)) linesAdded++;
+                    if (/^-(?!-)/.test(line)) linesRemoved++;
+                  }
+                }
+              }
+              if (call.name === "write") {
+                created.add(path);
+                try {
+                  const content = (JSON.parse(call.arguments || "{}") as Record<string, unknown>).content as string || "";
+                  if (content) linesAdded += content.split("\n").length;
+                } catch {}
+              }
+            }
+          }
+          if (edited.size > 0 || created.size > 0) {
+            fileStats.set(msg.id, { filesEdited: edited.size, filesCreated: created.size, linesAdded, linesRemoved });
+          }
+        }
         turnStartTs = null;
+        turnStartIdx = null;
       }
     }
-    return map;
+    return { turnDurations: durations, turnFileStatsMap: fileStats };
   }, [messages]);
 
   const visibleItems = useMemo(
-    () => mergeConsecutiveToolCalls(messages, turnDurations),
-    [messages, turnDurations],
+    () => mergeConsecutiveToolCalls(messages, turnDurations, turnFileStatsMap),
+    [messages, turnDurations, turnFileStatsMap],
   );
   const reversed = useMemo(() => [...visibleItems].reverse(), [visibleItems]);
 
@@ -165,9 +217,11 @@ export const MessageList = memo(function MessageList({
         toolCalls={item.toolCalls}
         isDark={isDark}
         turnDurationMs={item.turnDurationMs}
+        turnFileStats={item.turnFileStats}
+        sessionStreaming={isStreaming}
       />
     ),
-    [isDark],
+    [isDark, isStreaming],
   );
 
   const keyExtractor = useCallback((item: VisibleMessageItem) => item.key, []);
@@ -194,9 +248,9 @@ export const MessageList = memo(function MessageList({
 
   return (
     <View style={styles.root}>
-      <FlatList
+      <FlatList<VisibleMessageItem>
         ref={listRef}
-        data={reversed as VisibleMessageItem[]}
+        data={reversed}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
         inverted
@@ -249,6 +303,57 @@ function formatDuration(ms: number): string {
   return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`;
 }
 
+const SUMMARY_BLOCKS = 5;
+
+const TurnSummary = memo(function TurnSummary({
+  stats,
+  isDark,
+}: {
+  stats: TurnFileStats;
+  isDark: boolean;
+}) {
+  const totalFiles = stats.filesEdited + stats.filesCreated;
+  if (totalFiles === 0) return null;
+
+  const addColor = isDark ? "#3FB950" : "#1A7F37";
+  const removeColor = isDark ? "#F85149" : "#CF222E";
+  const textColor = isDark ? Colors.dark.textTertiary : Colors.light.textTertiary;
+
+  const totalLines = stats.linesAdded + stats.linesRemoved;
+  let addBlocks = 0;
+  let removeBlocks = 0;
+  if (totalLines > 0) {
+    addBlocks = Math.max(stats.linesAdded > 0 ? 1 : 0, Math.round((stats.linesAdded / totalLines) * SUMMARY_BLOCKS));
+    removeBlocks = Math.max(stats.linesRemoved > 0 ? 1 : 0, SUMMARY_BLOCKS - addBlocks);
+  } else if (stats.filesCreated > 0) {
+    addBlocks = SUMMARY_BLOCKS;
+  } else {
+    addBlocks = Math.ceil(SUMMARY_BLOCKS / 2);
+    removeBlocks = SUMMARY_BLOCKS - addBlocks;
+  }
+
+  return (
+    <View style={styles.summaryWrap}>
+      <Text style={styles.summaryLineCount}>
+        {stats.linesAdded > 0 && <Text style={{ color: addColor }}>+{stats.linesAdded}</Text>}
+        {stats.linesAdded > 0 && stats.linesRemoved > 0 && " "}
+        {stats.linesRemoved > 0 && <Text style={{ color: removeColor }}>{"\u2212"}{stats.linesRemoved}</Text>}
+      </Text>
+      <View style={styles.summaryBlocks}>
+        {Array.from({ length: addBlocks }).map((_, i) => (
+          <View key={`a-${i}`} style={[styles.summaryBlock, { backgroundColor: addColor }]} />
+        ))}
+        {Array.from({ length: removeBlocks }).map((_, i) => (
+          <View key={`r-${i}`} style={[styles.summaryBlock, { backgroundColor: removeColor }]} />
+        ))}
+      </View>
+      <Text style={[styles.summaryText, { color: textColor }]}>
+        {totalFiles} {totalFiles === 1 ? "file" : "files"}
+      </Text>
+    </View>
+  );
+});
+
 const TurnDivider = memo(function TurnDivider({
   durationMs,
   isDark,
@@ -273,18 +378,22 @@ const MessageItem = memo(function MessageItem({
   toolCalls,
   isDark,
   turnDurationMs,
+  turnFileStats,
+  sessionStreaming,
 }: {
   message: ChatMessage;
   toolCalls?: ToolCallInfo[];
   isDark: boolean;
   turnDurationMs?: number;
+  turnFileStats?: TurnFileStats;
+  sessionStreaming: boolean;
 }) {
   const content = (() => {
     switch (message.role) {
       case "user":
         return <UserMessage message={message} isDark={isDark} />;
       case "assistant":
-        return <AssistantMessage message={message} toolCallsOverride={toolCalls} isDark={isDark} />;
+        return <AssistantMessage message={message} toolCallsOverride={toolCalls} isDark={isDark} sessionStreaming={sessionStreaming} />;
       case "system":
         return <SystemMessage message={message} isDark={isDark} />;
       default:
@@ -299,6 +408,9 @@ const MessageItem = memo(function MessageItem({
       style={styles.itemWrap}
     >
       {content}
+      {turnFileStats && (
+        <TurnSummary stats={turnFileStats} isDark={isDark} />
+      )}
       {typeof turnDurationMs === "number" && turnDurationMs > 0 && (
         <TurnDivider durationMs={turnDurationMs} isDark={isDark} />
       )}
@@ -317,13 +429,42 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   itemWrap: { paddingVertical: 2 },
+  summaryWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingTop: 10,
+  },
+  summaryLineCount: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontFamily: Fonts.mono,
+    fontWeight: "600",
+  },
+  summaryBlocks: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+    height: 16,
+  },
+  summaryBlock: {
+    width: 8,
+    height: 16,
+    borderRadius: 2,
+  },
+  summaryText: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontFamily: Fonts.sans,
+  },
   dividerWrap: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    paddingTop: 10,
+    paddingTop: 6,
     paddingBottom: 24,
-    paddingHorizontal: 4,
+    paddingHorizontal: 16,
   },
   dividerLine: {
     flex: 1,

@@ -3,7 +3,6 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Colors, Fonts } from "@/constants/theme";
 import type { ToolCallInfo } from "../../../types";
 import { basename, parseToolArguments } from "../utils";
-import { ToolStatusDot } from "./tool-status-dot";
 import { CodePreview } from "../code-preview";
 import { AnimatedCollapse } from "../animated-collapse";
 
@@ -30,7 +29,6 @@ export const ReadToolCall = memo(function ReadToolCall({
   return (
     <View>
       <Pressable onPress={hasContent ? toggle : undefined} style={styles.header}>
-        <ToolStatusDot status={tc.status} />
         <Text style={[styles.fileName, { color: colors.textSecondary }]} numberOfLines={1}>
           Read {fileName || filePath || "file"}
         </Text>

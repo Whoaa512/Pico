@@ -3,7 +3,6 @@ import { StyleSheet, Text, View } from "react-native";
 import { Colors, Fonts } from "@/constants/theme";
 import type { ToolCallInfo } from "../../../types";
 import { parseToolArguments } from "../utils";
-import { ToolStatusDot } from "./tool-status-dot";
 
 interface DownloadToolCallProps {
   tc: ToolCallInfo;
@@ -21,7 +20,6 @@ export const DownloadToolCall = memo(function DownloadToolCall({
   return (
     <View>
       <View style={styles.header}>
-        <ToolStatusDot status={tc.status} />
         <Text style={[styles.label, { color: colors.textSecondary }]}>
           Download
         </Text>

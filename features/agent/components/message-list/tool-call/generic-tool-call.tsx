@@ -3,7 +3,6 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Colors, Fonts } from "@/constants/theme";
 import type { ToolCallInfo } from "../../../types";
 import { toolDisplayName } from "../utils";
-import { ToolStatusDot } from "./tool-status-dot";
 import { AnimatedCollapse } from "../animated-collapse";
 
 interface GenericToolCallProps {
@@ -25,7 +24,6 @@ export const GenericToolCall = memo(function GenericToolCall({
   return (
     <View>
       <Pressable onPress={hasResult ? toggle : undefined} style={styles.header}>
-        <ToolStatusDot status={tc.status} />
         <Text style={[styles.name, { color: colors.textSecondary }]}>
           {toolDisplayName(tc.name)}
         </Text>

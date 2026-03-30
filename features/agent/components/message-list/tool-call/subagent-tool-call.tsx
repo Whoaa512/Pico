@@ -5,7 +5,6 @@ import type { ToolCallInfo } from "../../../types";
 import { useStableMarkdown } from "../../../hooks/use-stable-markdown";
 import { markedDarkOptions, markedLightOptions } from "../../../theme";
 import { isToolActive, parseToolArguments } from "../utils";
-import { ToolStatusDot } from "./tool-status-dot";
 import { AnimatedCollapse } from "../animated-collapse";
 
 interface SubagentToolCallProps {
@@ -76,7 +75,6 @@ export const SubagentToolCall = memo(function SubagentToolCall({
   return (
     <View>
       <Pressable onPress={hasDetail ? toggle : undefined} style={styles.header}>
-        <ToolStatusDot status={tc.status} />
         <View style={styles.headerText}>
           <View style={styles.headerTopRow}>
             <Text style={[styles.agentName, { color: colors.textSecondary }]}>

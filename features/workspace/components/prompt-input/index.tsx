@@ -30,11 +30,7 @@ import {
 import { usePromptTheme } from "./use-theme-colors";
 import { SlashCommandDropdown } from "./slash-command-dropdown";
 import { AttachmentChips } from "./attachment-chips";
-import {
-  Toolbar,
-  TOOLBAR_HORIZONTAL_MARGIN,
-  TOOLBAR_WRAP_OFFSET,
-} from "./toolbar";
+import { Toolbar } from "./toolbar";
 import { MobileModelSheet } from "./mobile-model-sheet";
 import { MobileEffortSheet } from "./mobile-effort-sheet";
 import { WaveformBars } from "./waveform-bars";
@@ -159,6 +155,7 @@ export function PromptInput({
   const toolbarHiddenKeepLayout = !isWideScreen && !!mobileSheet;
   const toolbarCollapsed = !isWideScreen && hideBottomForKeyboard;
   const toolbarOverlap = Platform.OS === "web" || isWideScreen ? -4 : -1;
+  const shouldOverlaySlashCommands = Platform.OS === "web" || isWideScreen;
   const toolbarSkeleton = useMemo(
     () => <ToolbarSkeleton isDark={theme.isDark} />,
     [theme.isDark],
@@ -350,7 +347,7 @@ export function PromptInput({
   }, [setText, slashCommands]);
 
   const handleSelectCommand = useCallback((command: SlashCommand) => {
-    const newText = text.replace(/(?:^|\s)\/([\w]*)$/, (match) => {
+    const newText = text.replace(/(?:^|\s)\/([\w:-]*)$/, (match) => {
       const prefix = match.startsWith(" ") ? " " : "";
       return `${prefix}/${command.name} `;
     });
@@ -452,16 +449,6 @@ export function PromptInput({
         },
       ]}
     >
-      {/* Slash command dropdown */}
-      {showCommands && (
-        <SlashCommandDropdown
-          commands={filteredCommands}
-          selectedIndex={slashIndex}
-          dropdownAnim={dropdownAnim}
-          onSelect={handleSelectCommand}
-        />
-      )}
-
       {/* Send error */}
       {!!errorMessage && (
         <Pressable
@@ -486,34 +473,47 @@ export function PromptInput({
         </Pressable>
       )}
 
-      {/* Input card */}
-      <Animated.View
-        style={[
-          styles.card,
-          {
-            backgroundColor: theme.cardBg,
-            borderColor: theme.cardBorder,
-            borderTopLeftRadius: showCommands || stackedAbove ? 0 : 12,
-            borderTopRightRadius: showCommands || stackedAbove ? 0 : 12,
-            marginBottom: toolbarOverlap,
-            ...(entryDone
-              ? Platform.OS === "web"
-                ? {
-                    boxShadow: isFocused ? "0px 2px 6px rgba(0, 0, 0, 0.08)" : "0px 0px 0px rgba(0, 0, 0, 0)",
-                    transitionProperty: "box-shadow",
-                    transitionDuration: "180ms",
-                    transitionTimingFunction: "ease",
-                  }
-                : {
-                    boxShadow: isFocused
-                      ? `0px ${Platform.OS === "ios" ? 2 : 3}px ${Platform.OS === "ios" ? 5 : 8}px rgba(0, 0, 0, ${Platform.OS === "ios" ? 0.07 : 0.1})`
-                      : "0px 0px 0px rgba(0, 0, 0, 0)",
-                    elevation: isFocused ? 2 : 0,
-                  }
-              : {}),
-          } as any,
-        ]}
-      >
+      <View style={styles.composerStack}>
+        {showCommands && (
+          <SlashCommandDropdown
+            commands={filteredCommands}
+            selectedIndex={slashIndex}
+            dropdownAnim={dropdownAnim}
+            overlay={shouldOverlaySlashCommands}
+            onSelect={handleSelectCommand}
+          />
+        )}
+
+        {/* Input card */}
+        <Animated.View
+          style={[
+            styles.card,
+            {
+              backgroundColor: theme.cardBg,
+              borderColor: theme.cardBorder,
+              borderTopLeftRadius:
+                (showCommands && !shouldOverlaySlashCommands) || stackedAbove ? 0 : 12,
+              borderTopRightRadius:
+                (showCommands && !shouldOverlaySlashCommands) || stackedAbove ? 0 : 12,
+              marginBottom: toolbarOverlap,
+              ...(entryDone
+                ? Platform.OS === "web"
+                  ? {
+                      boxShadow: isFocused ? "0px 2px 6px rgba(0, 0, 0, 0.08)" : "0px 0px 0px rgba(0, 0, 0, 0)",
+                      transitionProperty: "box-shadow",
+                      transitionDuration: "180ms",
+                      transitionTimingFunction: "ease",
+                    }
+                  : {
+                      boxShadow: isFocused
+                        ? `0px ${Platform.OS === "ios" ? 2 : 3}px ${Platform.OS === "ios" ? 5 : 8}px rgba(0, 0, 0, ${Platform.OS === "ios" ? 0.07 : 0.1})`
+                        : "0px 0px 0px rgba(0, 0, 0, 0)",
+                      elevation: isFocused ? 2 : 0,
+                    }
+                : {}),
+            } as any,
+          ]}
+        >
         <TextInput
           ref={inputRef}
           placeholder="Ask anything..."
@@ -619,7 +619,8 @@ export function PromptInput({
             </Pressable>
           )}
         </View>
-      </Animated.View>
+        </Animated.View>
+      </View>
 
       <View
         style={[
@@ -684,6 +685,11 @@ const styles = StyleSheet.create({
   speechErrorText: {
     fontSize: 12,
     fontFamily: Fonts.sans,
+  },
+  composerStack: {
+    position: "relative",
+    overflow: "visible",
+    zIndex: Platform.OS === "android" ? 8 : 10,
   },
   card: {
     borderBottomLeftRadius: 12,

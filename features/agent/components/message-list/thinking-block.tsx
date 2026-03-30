@@ -75,9 +75,7 @@ export const ThinkingBlock = memo(function ThinkingBlock({
 });
 
 const styles = StyleSheet.create({
-  container: {
-    marginBottom: 6,
-  },
+  container: {},
   header: {
     alignSelf: "flex-start",
     paddingVertical: 4,

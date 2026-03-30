@@ -1,28 +1,39 @@
-import { memo, useCallback, useEffect, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Colors, Fonts } from "@/constants/theme";
 import type { ToolCallInfo } from "../../../types";
 import { basename, isToolActive, parseToolArguments, countLines } from "../utils";
-import { ToolStatusDot } from "./tool-status-dot";
 import { CodePreview } from "../code-preview";
 import { AnimatedCollapse } from "../animated-collapse";
 
 interface WriteToolCallProps {
   tc: ToolCallInfo;
   isDark: boolean;
+  turnCompleted?: boolean;
 }
 
 export const WriteToolCall = memo(function WriteToolCall({
   tc,
   isDark,
+  turnCompleted = false,
 }: WriteToolCallProps) {
   const colors = isDark ? Colors.dark : Colors.light;
   const active = isToolActive(tc);
-  const [expanded, setExpanded] = useState(() => isToolActive(tc));
+  const [expanded, setExpanded] = useState(() => isToolActive(tc) || (!turnCompleted && tc.status === "complete"));
 
   useEffect(() => {
     if (active) setExpanded(true);
   }, [active]);
+
+  const prevTurnCompleted = useRef(turnCompleted);
+  useEffect(() => {
+    const justCompleted = turnCompleted && !prevTurnCompleted.current;
+    prevTurnCompleted.current = turnCompleted;
+    if (justCompleted && !active) {
+      const timer = setTimeout(() => setExpanded(false), 400);
+      return () => clearTimeout(timer);
+    }
+  }, [turnCompleted, active]);
 
   const toggle = useCallback(() => setExpanded((p) => !p), []);
 
@@ -37,7 +48,6 @@ export const WriteToolCall = memo(function WriteToolCall({
   return (
     <View>
       <Pressable onPress={toggle} style={styles.header}>
-        <ToolStatusDot status={tc.status} />
         <View style={styles.titleRow}>
           <Text style={[styles.fileName, { color: colors.textSecondary }]} numberOfLines={1}>
             {title} {fileName || filePath || "file"}

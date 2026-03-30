@@ -3,7 +3,6 @@ import { Animated, Pressable, StyleSheet, Text, View } from "react-native";
 import { Colors, Fonts } from "@/constants/theme";
 import type { ToolCallInfo } from "../../../types";
 import { isToolActive, toolDisplayName, basename, parseToolArguments, countLines } from "../utils";
-import { ToolStatusDot } from "./tool-status-dot";
 import { AnimatedCollapse } from "../animated-collapse";
 import { BashToolCall } from "./bash-tool-call";
 import { ReadToolCall } from "./read-tool-call";
@@ -34,24 +33,17 @@ interface RenderGroup {
 function groupToolCalls(toolCalls: ToolCallInfo[]): RenderGroup[] {
   if (!toolCalls.length) return [];
   const result: RenderGroup[] = [];
-  const pending = new Map<string, RenderGroup>();
 
   for (const tc of toolCalls) {
     const stableId = tc.previousId ?? tc.id;
     if (NEVER_GROUP.has(tc.name)) {
       result.push({ key: `s-${stableId}`, toolName: tc.name, calls: [tc] });
     } else {
-      const existing = pending.get(tc.name);
-      if (existing) {
-        existing.calls.push(tc);
+      const last = result[result.length - 1];
+      if (last && last.toolName === tc.name && !NEVER_GROUP.has(last.toolName)) {
+        last.calls.push(tc);
       } else {
-        const item: RenderGroup = {
-          key: `g-${stableId}`,
-          toolName: tc.name,
-          calls: [tc],
-        };
-        pending.set(tc.name, item);
-        result.push(item);
+        result.push({ key: `g-${stableId}`, toolName: tc.name, calls: [tc] });
       }
     }
   }
@@ -61,11 +53,13 @@ function groupToolCalls(toolCalls: ToolCallInfo[]): RenderGroup[] {
 interface ToolCallGroupProps {
   toolCalls: ToolCallInfo[];
   isDark: boolean;
+  turnCompleted?: boolean;
 }
 
 export const ToolCallGroup = memo(function ToolCallGroup({
   toolCalls,
   isDark,
+  turnCompleted = false,
 }: ToolCallGroupProps) {
   const groups = useMemo(() => groupToolCalls(toolCalls), [toolCalls]);
   if (!groups.length) return null;
@@ -74,7 +68,7 @@ export const ToolCallGroup = memo(function ToolCallGroup({
     <View style={styles.container}>
       {groups.map((g) =>
         g.calls.length === 1 ? (
-          <SingleToolCall key={g.key} tc={g.calls[0]} isDark={isDark} />
+          <SingleToolCall key={g.key} tc={g.calls[0]} isDark={isDark} turnCompleted={turnCompleted} />
         ) : (
           <GroupedToolCalls
             key={g.key}
@@ -88,16 +82,16 @@ export const ToolCallGroup = memo(function ToolCallGroup({
   );
 });
 
-function SingleToolCall({ tc, isDark }: { tc: ToolCallInfo; isDark: boolean }) {
+function SingleToolCall({ tc, isDark, turnCompleted }: { tc: ToolCallInfo; isDark: boolean; turnCompleted: boolean }) {
   switch (tc.name) {
     case "bash":
-      return <BashToolCall tc={tc} isDark={isDark} />;
+      return <BashToolCall tc={tc} isDark={isDark} turnCompleted={turnCompleted} />;
     case "read":
       return <ReadToolCall tc={tc} isDark={isDark} />;
     case "write":
-      return <WriteToolCall tc={tc} isDark={isDark} />;
+      return <WriteToolCall tc={tc} isDark={isDark} turnCompleted={turnCompleted} />;
     case "edit":
-      return <EditToolCall tc={tc} isDark={isDark} />;
+      return <EditToolCall tc={tc} isDark={isDark} turnCompleted={turnCompleted} />;
     case "download":
       return <DownloadToolCall tc={tc} isDark={isDark} />;
     case "subagent":
@@ -213,7 +207,6 @@ const GroupedToolCalls = memo(function GroupedToolCalls({
         <View style={styles.expandedList}>
           {visible.map((tc) => (
             <View key={tc.id} style={styles.expandedItem}>
-              <ToolStatusDot status={tc.status} size={4} />
               <Text
                 style={[styles.expandedItemText, { color: colors.textSecondary }]}
                 numberOfLines={1}
@@ -240,8 +233,7 @@ const GroupedToolCalls = memo(function GroupedToolCalls({
 
 const styles = StyleSheet.create({
   container: {
-    gap: 2,
-    marginTop: 4,
+    gap: 8,
   },
   groupHeader: {
     flexDirection: "row",
@@ -260,8 +252,8 @@ const styles = StyleSheet.create({
   },
   expandedList: {
     paddingLeft: 12,
-    paddingTop: 4,
-    gap: 2,
+    paddingTop: 6,
+    gap: 4,
   },
   expandedItem: {
     flexDirection: "row",

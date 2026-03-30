@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  AppState,
+  Platform,
+  Pressable,
+  Text,
+  View,
+  type AppStateStatus,
+} from 'react-native';
 import { Redirect, Slot, usePathname, useRouter } from 'expo-router';
 
 import { Colors, Fonts } from '@/constants/theme';
@@ -165,6 +173,7 @@ export default function AppLayout() {
   const [status, setStatus] = useState<StartupStatus>('loading');
   const [retryNonce, setRetryNonce] = useState(0);
   const isServerRoute = pathname === '/servers';
+  const ensureActiveServerSession = useAuthStore((s) => s.ensureActiveServerSession);
   const refreshActiveServerSession = useAuthStore((s) => s.refreshActiveServerSession);
 
   usePreviewServiceWorker();
@@ -193,6 +202,53 @@ export default function AppLayout() {
     }),
     [serverAddress, accessToken, onAuthError, onApiAuthError],
   );
+
+  const syncSessionInBackground = useCallback(() => {
+    if (!serverAddress || !accessToken) {
+      return;
+    }
+
+    void ensureActiveServerSession();
+  }, [accessToken, ensureActiveServerSession, serverAddress]);
+
+  useEffect(() => {
+    if (!serverAddress || !accessToken) {
+      return;
+    }
+
+    const appStateSubscription = AppState.addEventListener(
+      'change',
+      (nextState: AppStateStatus) => {
+        if (nextState === 'active') {
+          syncSessionInBackground();
+        }
+      },
+    );
+
+    if (Platform.OS !== 'web') {
+      return () => {
+        appStateSubscription.remove();
+      };
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        syncSessionInBackground();
+      }
+    };
+    const handleWindowFocus = () => {
+      syncSessionInBackground();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleWindowFocus);
+
+    return () => {
+      appStateSubscription.remove();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleWindowFocus);
+    };
+  }, [accessToken, serverAddress, syncSessionInBackground]);
 
   useEffect(() => {
     if (!serversLoaded || !authLoaded) return;

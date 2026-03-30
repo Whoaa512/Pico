@@ -54,13 +54,13 @@ export function AnimatedCollapse({
     }
 
     height.value = withTiming(0, {
-      duration: 220,
+      duration: 280,
       easing: Easing.inOut(Easing.cubic),
     }, (finished) => {
       if (finished) runOnJS(setMounted)(false);
     });
     opacity.value = withTiming(0, {
-      duration: 140,
+      duration: 200,
       easing: Easing.in(Easing.cubic),
     });
   }, [expanded, mounted, targetHeight, height, opacity]);

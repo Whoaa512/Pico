@@ -35,6 +35,13 @@ import type {
 } from "../generated/types.gen";
 import type { ImageContent } from "../types/stream-events";
 
+interface AuthRetryOptions {
+  _authRetry?: boolean;
+  _authRetryRequest?: Request;
+  fetch?: (request: Request) => Promise<Response>;
+  url?: string;
+}
+
 function unwrapResult<T>(result: { data?: unknown; error?: unknown }): T {
   if (result.error !== undefined && result.error !== null) {
     const errBody = result.error;
@@ -68,18 +75,26 @@ export class ApiClient {
     this._serverUrl = serverUrl;
     this._accessToken = accessToken;
     defaultClient.setConfig({ baseUrl: serverUrl });
-    defaultClient.interceptors.request.use((request: Request) => {
-      request.headers.set("Authorization", `Bearer ${this._accessToken}`);
+    defaultClient.interceptors.request.use((request: Request, opts: AuthRetryOptions) => {
+      if (this._accessToken) {
+        request.headers.set("Authorization", `Bearer ${this._accessToken}`);
+      } else {
+        request.headers.delete("Authorization");
+        request.headers.delete("authorization");
+      }
+
+      try {
+        opts._authRetryRequest = request.clone();
+      } catch {
+        opts._authRetryRequest = undefined;
+      }
+
       return request;
     });
 
     defaultClient.interceptors.response.use(
-      async (response: Response, request: Request, opts: any) => {
-        if (
-          response.status !== 401 ||
-          (opts as { _authRetry?: boolean })._authRetry ||
-          !this._onAuthError
-        ) {
+      async (response: Response, request: Request, opts: AuthRetryOptions) => {
+        if (response.status !== 401 || opts._authRetry || !this._onAuthError) {
           return response;
         }
 
@@ -89,19 +104,24 @@ export class ApiClient {
         const refreshed = await this._onAuthError();
         if (!refreshed) return response;
 
-        const retryHeaders = new Headers(request.headers);
+        const retrySource = opts._authRetryRequest;
+        const retryHeaders = new Headers(retrySource?.headers ?? request.headers);
         retryHeaders.set("Authorization", `Bearer ${this._accessToken}`);
 
+        const retryRequest = retrySource
+          ? new Request(retrySource, { headers: retryHeaders, signal: request.signal })
+          : new Request(request.url, {
+              method: request.method,
+              headers: retryHeaders,
+              body:
+                request.method !== "GET" && request.method !== "HEAD"
+                  ? request.body
+                  : undefined,
+              signal: request.signal,
+            });
+
         try {
-          return await fetch(request.url, {
-            method: request.method,
-            headers: retryHeaders,
-            body:
-              request.method !== "GET" && request.method !== "HEAD"
-                ? request.body
-                : undefined,
-            signal: request.signal,
-          });
+          return await (opts.fetch ?? fetch)(retryRequest);
         } catch {
           return response;
         }

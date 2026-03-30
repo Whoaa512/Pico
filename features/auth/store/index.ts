@@ -2,8 +2,14 @@ import { create } from 'zustand';
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 
-import { client, sdk } from '@pi-ui/client';
-import type { AuthTokensResponse } from '@pi-ui/client';
+import {
+  client,
+  sdk,
+  unwrapApiData,
+  type AuthTokensResponse,
+} from '@pi-ui/client';
+import { useServersStore, type Server } from '@/features/servers/store';
+
 const {
   checkSession,
   login: apiLogin,
@@ -11,8 +17,6 @@ const {
   pair: apiPair,
   refresh: apiRefresh,
 } = sdk;
-import { unwrapApiData } from '@pi-ui/client';
-import { useServersStore, type Server } from '@/features/servers/store';
 
 const TOKENS_KEY = 'auth_tokens';
 const ACTIVE_SERVER_KEY = 'auth_active_server';
@@ -28,10 +32,13 @@ const RETRY_EXCLUDED_ROUTES = [
   '/api/auth/pair',
   '/api/auth/refresh',
 ];
-const REFRESH_SKEW_MS = 60_000;
+const REFRESH_SKEW_MS = 15_000;
+const REFRESH_RETRY_DELAY_MS = 5_000;
 
 let clientAuthInitialized = false;
 let configuredServerId: string | null = null;
+let scheduledRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+let scheduledRefreshServerId: string | null = null;
 const refreshInFlight = new Map<string, Promise<AuthSessionBundle | null>>();
 
 export interface AuthSessionBundle {
@@ -65,6 +72,7 @@ interface AuthState {
   activateServer: (server: Server) => Promise<boolean>;
   hasToken: (serverId: string) => boolean;
   refreshServerSession: (serverId: string) => Promise<AuthSessionBundle | null>;
+  ensureActiveServerSession: () => Promise<boolean>;
   refreshActiveServerSession: () => Promise<boolean>;
   clearServerSession: (serverId: string) => Promise<void>;
 }
@@ -141,12 +149,27 @@ function parseExpiresAt(value: string) {
   return Number.isFinite(expiresAt) ? expiresAt : 0;
 }
 
-function isAccessTokenNearExpiry(session: AuthSessionBundle) {
-  return parseExpiresAt(session.accessExpiresAt) - Date.now() <= REFRESH_SKEW_MS;
+function msUntilExpiry(value: string) {
+  return parseExpiresAt(value) - Date.now();
+}
+
+function isAccessTokenNearExpiry(
+  session: AuthSessionBundle,
+  skewMs = REFRESH_SKEW_MS,
+) {
+  return msUntilExpiry(session.accessExpiresAt) <= skewMs;
 }
 
 function isRefreshTokenExpired(session: AuthSessionBundle) {
   return parseExpiresAt(session.refreshExpiresAt) <= Date.now();
+}
+
+function clearScheduledRefresh() {
+  if (scheduledRefreshTimer) {
+    clearTimeout(scheduledRefreshTimer);
+    scheduledRefreshTimer = null;
+  }
+  scheduledRefreshServerId = null;
 }
 
 function extractErrorMessage(error: unknown, fallback: string) {
@@ -262,6 +285,87 @@ export const useAuthStore = create<AuthState>((set, get) => {
     await writeActiveServerId(activeServerId);
   }
 
+  function scheduleRefreshAttempt(serverId: string, delayMs: number) {
+    clearScheduledRefresh();
+    scheduledRefreshServerId = serverId;
+    scheduledRefreshTimer = setTimeout(async () => {
+      if (scheduledRefreshServerId !== serverId) {
+        return;
+      }
+
+      const currentSession = get().tokens[serverId];
+      if (!currentSession || get().activeServerId !== serverId) {
+        clearScheduledRefresh();
+        return;
+      }
+
+      const refreshed = await get().refreshServerSession(serverId);
+      if (refreshed) {
+        return;
+      }
+
+      const retrySession = get().tokens[serverId];
+      if (
+        !retrySession ||
+        get().activeServerId !== serverId ||
+        isRefreshTokenExpired(retrySession)
+      ) {
+        clearScheduledRefresh();
+        return;
+      }
+
+      scheduleRefreshAttempt(serverId, REFRESH_RETRY_DELAY_MS);
+    }, Math.max(0, delayMs));
+  }
+
+  function syncRefreshSchedule(activeServerId = get().activeServerId) {
+    if (!activeServerId) {
+      clearScheduledRefresh();
+      return;
+    }
+
+    const session = get().tokens[activeServerId];
+    if (!session) {
+      clearScheduledRefresh();
+      return;
+    }
+
+    if (isRefreshTokenExpired(session)) {
+      clearScheduledRefresh();
+      void removeServerSession(activeServerId, null);
+      return;
+    }
+
+    scheduleRefreshAttempt(
+      activeServerId,
+      Math.max(0, msUntilExpiry(session.accessExpiresAt) - REFRESH_SKEW_MS),
+    );
+  }
+
+  async function ensureServerSession(
+    serverId: string,
+    options: { force?: boolean } = {},
+  ) {
+    const session = get().tokens[serverId];
+    if (!session) {
+      return null;
+    }
+
+    if (isRefreshTokenExpired(session)) {
+      await removeServerSession(serverId);
+      return null;
+    }
+
+    if (!options.force && !isAccessTokenNearExpiry(session)) {
+      if (get().activeServerId === serverId) {
+        syncRefreshSchedule(serverId);
+      }
+      return session;
+    }
+
+    return get().refreshServerSession(serverId);
+  }
+
   async function applySessionBundle(
     serverId: string,
     session: AuthSessionBundle,
@@ -279,6 +383,8 @@ export const useAuthStore = create<AuthState>((set, get) => {
     if (options.baseUrl) {
       configureClient(serverId, options.baseUrl);
     }
+
+    syncRefreshSchedule(activeServerId);
   }
 
   async function removeServerSession(
@@ -299,6 +405,8 @@ export const useAuthStore = create<AuthState>((set, get) => {
         configureClient(null, undefined);
       }
     }
+
+    syncRefreshSchedule(nextActiveServerId);
   }
 
   return {
@@ -405,24 +513,14 @@ export const useAuthStore = create<AuthState>((set, get) => {
 
       configureClient(server.id, server.address);
 
-      if (isRefreshTokenExpired(session)) {
-        await removeServerSession(server.id, get().activeServerId === server.id ? null : get().activeServerId);
+      const ensuredSession = await ensureServerSession(server.id);
+      if (!ensuredSession) {
         if (previousConfiguredServerId && previousConfiguredServerId !== server.id) {
           configureClient(previousConfiguredServerId, previousConfiguredServer?.address);
+        } else if (previousConfiguredServerId !== server.id) {
+          configureClient(null, undefined);
         }
         return false;
-      }
-
-      if (isAccessTokenNearExpiry(session)) {
-        const refreshed = await get().refreshServerSession(server.id);
-        if (!refreshed) {
-          if (previousConfiguredServerId && previousConfiguredServerId !== server.id) {
-            configureClient(previousConfiguredServerId, previousConfiguredServer?.address);
-          } else if (previousConfiguredServerId !== server.id) {
-            configureClient(null, undefined);
-          }
-          return false;
-        }
       }
 
       const result = await checkSession();
@@ -453,6 +551,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
 
       set({ activeServerId: server.id, remote });
       await writeActiveServerId(server.id);
+      syncRefreshSchedule(server.id);
       return true;
     },
 
@@ -479,7 +578,9 @@ export const useAuthStore = create<AuthState>((set, get) => {
 
         const server = findServer(serverId);
         if (!server) {
-          await removeServerSession(serverId);
+          if (useServersStore.getState().loaded) {
+            await removeServerSession(serverId);
+          }
           return null;
         }
 
@@ -522,11 +623,18 @@ export const useAuthStore = create<AuthState>((set, get) => {
       }
     },
 
+    ensureActiveServerSession: async () => {
+      if (!configuredServerId) {
+        return false;
+      }
+      return !!(await ensureServerSession(configuredServerId));
+    },
+
     refreshActiveServerSession: async () => {
       if (!configuredServerId) {
         return false;
       }
-      return !!(await get().refreshServerSession(configuredServerId));
+      return !!(await ensureServerSession(configuredServerId, { force: true }));
     },
 
     clearServerSession: async (serverId: string) => {
@@ -541,7 +649,6 @@ function initializeClientAuth() {
   }
   clientAuthInitialized = true;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (client.setConfig as (cfg: Record<string, unknown>) => void)({
     auth: async () => currentConfiguredAccessToken(),
     requestValidator: async (value: unknown) => {
@@ -573,6 +680,29 @@ function initializeClientAuth() {
     },
   });
 
+  client.interceptors.request.use(async (request, opts) => {
+    const path = currentRequestPath(request.url, opts.url);
+    if (!RETRY_EXCLUDED_ROUTES.some((route) => path.includes(route))) {
+      await useAuthStore.getState().ensureActiveServerSession();
+    }
+
+    const token = currentConfiguredAccessToken();
+    if (token) {
+      request.headers.set('Authorization', `Bearer ${token}`);
+    } else {
+      request.headers.delete('Authorization');
+      request.headers.delete('authorization');
+    }
+
+    try {
+      (opts as { _authRetryRequest?: Request })._authRetryRequest = request.clone();
+    } catch {
+      (opts as { _authRetryRequest?: Request })._authRetryRequest = undefined;
+    }
+
+    return request;
+  });
+
   client.interceptors.response.use(async (response, request, opts) => {
     if (response.status !== 401 || (opts as { _authRetry?: boolean })._authRetry) {
       return response;
@@ -593,7 +723,8 @@ function initializeClientAuth() {
       return response;
     }
 
-    const retryHeaders = new Headers(request.headers);
+    const retrySource = (opts as { _authRetryRequest?: Request })._authRetryRequest;
+    const retryHeaders = new Headers(retrySource?.headers ?? request.headers);
     retryHeaders.delete('Authorization');
     retryHeaders.delete('authorization');
     const newToken = currentConfiguredAccessToken();
@@ -602,13 +733,18 @@ function initializeClientAuth() {
     }
 
     const _fetch = (opts as { fetch?: typeof fetch }).fetch ?? globalThis.fetch;
-    const retryRequest = new Request(request.url, {
-      method: request.method,
-      headers: retryHeaders,
-      body: request.method !== 'GET' && request.method !== 'HEAD' ? request.body : undefined,
-      redirect: 'follow',
-      signal: request.signal,
-    });
+    const retryRequest = retrySource
+      ? new Request(retrySource, { headers: retryHeaders, signal: request.signal })
+      : new Request(request.url, {
+          method: request.method,
+          headers: retryHeaders,
+          body:
+            request.method !== 'GET' && request.method !== 'HEAD'
+              ? request.body
+              : undefined,
+          redirect: 'follow',
+          signal: request.signal,
+        });
 
     try {
       return await _fetch(retryRequest);

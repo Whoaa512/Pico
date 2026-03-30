@@ -5,31 +5,42 @@ import { Colors, Fonts } from "@/constants/theme";
 import { CodePreview } from "../code-preview";
 import type { ToolCallInfo } from "../../../types";
 import { basename, isToolActive, parseToolArguments } from "../utils";
-import { ToolStatusDot } from "./tool-status-dot";
 import { AnimatedCollapse } from "../animated-collapse";
 
 interface EditToolCallProps {
   tc: ToolCallInfo;
   isDark: boolean;
+  turnCompleted?: boolean;
 }
 
 export const EditToolCall = memo(function EditToolCall({
   tc,
   isDark,
+  turnCompleted = false,
 }: EditToolCallProps) {
   const colors = isDark ? Colors.dark : Colors.light;
   const { width, height } = useWindowDimensions();
   const active = isToolActive(tc);
   const hasCompleted = tc.status === "complete";
-  const [expanded, setExpanded] = useState(() => active || hasCompleted);
+  const [expanded, setExpanded] = useState(() => active || (!turnCompleted && hasCompleted));
   const [fullscreenOpen, setFullscreenOpen] = useState(false);
   const [heroRect, setHeroRect] = useState({ x: 16, y: 120, width: Math.max(240, width - 32), height: 220 });
   const previewRef = useRef<View | null>(null);
   const heroProgress = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    if (active || hasCompleted) setExpanded(true);
-  }, [active, hasCompleted]);
+    if (active) setExpanded(true);
+  }, [active]);
+
+  const prevTurnCompleted = useRef(turnCompleted);
+  useEffect(() => {
+    const justCompleted = turnCompleted && !prevTurnCompleted.current;
+    prevTurnCompleted.current = turnCompleted;
+    if (justCompleted && !active) {
+      const timer = setTimeout(() => setExpanded(false), 400);
+      return () => clearTimeout(timer);
+    }
+  }, [turnCompleted, active]);
 
   const toggle = useCallback(() => setExpanded((p) => !p), []);
 
@@ -120,7 +131,6 @@ export const EditToolCall = memo(function EditToolCall({
   return (
     <View>
       <Pressable onPress={toggle} style={styles.header}>
-        <ToolStatusDot status={tc.status} />
         <View style={styles.titleRow}>
           <Text style={[styles.fileName, { color: colors.textSecondary }]} numberOfLines={1}>
             {title} {fileName || filePath || "file"}
