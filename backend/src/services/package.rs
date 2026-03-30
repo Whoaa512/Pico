@@ -1,12 +1,13 @@
 use std::process::Command;
 
-use crate::config::PackageConfig;
+use crate::config::{AppConfig, PackageConfig};
 use crate::models::{OperationResult, PackageStatus};
 
-pub fn get_status(config: &PackageConfig) -> PackageStatus {
+pub fn get_status(config: &PackageConfig, app_config: &AppConfig) -> PackageStatus {
     let name = &config.name;
-    let installed_version = get_installed_version(name);
-    let latest_version = get_latest_version(name);
+    let npm = app_config.npm_binary();
+    let installed_version = get_installed_version(name, &npm);
+    let latest_version = get_latest_version(name, &npm);
 
     PackageStatus {
         name: name.clone(),
@@ -16,19 +17,21 @@ pub fn get_status(config: &PackageConfig) -> PackageStatus {
     }
 }
 
-pub fn install(config: &PackageConfig) -> OperationResult {
+pub fn install(config: &PackageConfig, app_config: &AppConfig) -> OperationResult {
     let name = &config.name;
+    let npm = app_config.npm_binary();
     let cmd = config
         .install_command
         .clone()
-        .unwrap_or_else(|| format!("npm install -g {name}"));
+        .unwrap_or_else(|| format!("{npm} install -g {name}"));
 
     run_npm_command("install", &cmd)
 }
 
-pub fn update(config: &PackageConfig) -> OperationResult {
+pub fn update(config: &PackageConfig, app_config: &AppConfig) -> OperationResult {
     let name = &config.name;
-    let cmd = format!("npm update -g {name}");
+    let npm = app_config.npm_binary();
+    let cmd = format!("{npm} update -g {name}");
     run_npm_command("update", &cmd)
 }
 
@@ -55,8 +58,8 @@ fn run_npm_command(operation: &str, cmd: &str) -> OperationResult {
     }
 }
 
-fn get_installed_version(package_name: &str) -> Option<String> {
-    let output = Command::new("npm")
+fn get_installed_version(package_name: &str, npm: &str) -> Option<String> {
+    let output = Command::new(npm)
         .args(["list", "-g", package_name, "--depth=0", "--json"])
         .output()
         .ok()?;
@@ -72,8 +75,8 @@ fn get_installed_version(package_name: &str) -> Option<String> {
         .map(|s| s.to_string())
 }
 
-fn get_latest_version(package_name: &str) -> Option<String> {
-    let output = Command::new("npm")
+fn get_latest_version(package_name: &str, npm: &str) -> Option<String> {
+    let output = Command::new(npm)
         .args(["view", package_name, "version"])
         .output()
         .ok()?;

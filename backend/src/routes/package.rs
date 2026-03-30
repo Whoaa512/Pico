@@ -27,7 +27,8 @@ pub async fn status(
 
     let pkg_status = tokio::task::spawn_blocking({
         let config = state.config.package.clone();
-        move || package::get_status(&config)
+        let app_config = state.config.clone();
+        move || package::get_status(&config, &app_config)
     })
     .await
     .unwrap();
@@ -55,7 +56,8 @@ pub async fn install(
 
     let result = tokio::task::spawn_blocking({
         let config = state.config.package.clone();
-        move || package::install(&config)
+        let app_config = state.config.clone();
+        move || package::install(&config, &app_config)
     })
     .await
     .unwrap();
@@ -86,7 +88,8 @@ pub async fn update(
 
     let result = tokio::task::spawn_blocking({
         let config = state.config.package.clone();
-        move || package::update(&config)
+        let app_config = state.config.clone();
+        move || package::update(&config, &app_config)
     })
     .await
     .unwrap();

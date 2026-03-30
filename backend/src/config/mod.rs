@@ -13,6 +13,13 @@ fn default_refresh_token_ttl_days() -> u64 {
     30
 }
 
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
+pub struct PathsConfig {
+    pub node: Option<String>,
+    pub npm: Option<String>,
+    pub pi: Option<String>,
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct AppConfig {
     pub server: ServerConfig,
@@ -21,6 +28,7 @@ pub struct AppConfig {
     pub sessions: Option<SessionsConfig>,
     pub agent: Option<AgentConfig>,
     pub chat: Option<ChatConfig>,
+    pub paths: Option<PathsConfig>,
 }
 
 fn default_extensions() -> Vec<String> {
@@ -101,24 +109,34 @@ impl Default for AppConfig {
             sessions: None,
             agent: None,
             chat: None,
+            paths: None,
         }
     }
 }
 
 impl AppConfig {
     pub fn pi_binary(&self) -> String {
+        if let Some(path) = self.paths.as_ref().and_then(|p| p.pi.as_ref()) {
+            return path.clone();
+        }
         if let Some(path) = self.agent.as_ref().and_then(|a| a.pi_binary.as_ref()) {
             return path.clone();
         }
-        if let Ok(output) = std::process::Command::new("which").arg("pi").output() {
-            if output.status.success() {
-                let resolved = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                if !resolved.is_empty() {
-                    return resolved;
-                }
-            }
+        resolve_which("pi").unwrap_or_else(|| "pi".to_string())
+    }
+
+    pub fn node_binary(&self) -> String {
+        if let Some(path) = self.paths.as_ref().and_then(|p| p.node.as_ref()) {
+            return path.clone();
         }
-        "pi".to_string()
+        resolve_which("node").unwrap_or_else(|| "node".to_string())
+    }
+
+    pub fn npm_binary(&self) -> String {
+        if let Some(path) = self.paths.as_ref().and_then(|p| p.npm.as_ref()) {
+            return path.clone();
+        }
+        resolve_which("npm").unwrap_or_else(|| "npm".to_string())
     }
 
     pub fn sessions_base_path(&self) -> PathBuf {
@@ -231,4 +249,13 @@ impl AppConfig {
         }
         args
     }
+}
+
+fn resolve_which(command: &str) -> Option<String> {
+    let output = std::process::Command::new("which").arg(command).output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let resolved = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if resolved.is_empty() { None } else { Some(resolved) }
 }

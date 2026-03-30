@@ -5,7 +5,7 @@ use crate::config::AppConfig;
 use crate::models::agent::{AgentRuntimeStatus, RuntimeDependencyStatus};
 
 pub fn get_agent_runtime_status(config: &AppConfig) -> AgentRuntimeStatus {
-    let node = inspect_binary("node");
+    let node = inspect_binary(&config.node_binary());
     let pi = inspect_binary(&config.pi_binary());
 
     AgentRuntimeStatus {
@@ -19,13 +19,16 @@ pub fn get_agent_runtime_status(config: &AppConfig) -> AgentRuntimeStatus {
 pub fn get_runtime_prerequisite_error(status: &AgentRuntimeStatus) -> Option<String> {
     if !status.node.installed {
         return Some(
-            "Node.js is not installed on this machine. Install Node.js first, then install Pi."
+            "Node.js is not installed. Install it from https://nodejs.org or set [paths].node in config.toml"
                 .to_string(),
         );
     }
 
     if !status.pi.installed {
-        return Some("Pi is not installed on this machine. Install Pi before starting a session.".to_string());
+        return Some(
+            "pi-coding-agent is not installed. Run: npm install -g @mariozechner/pi-coding-agent — or set [paths].pi in config.toml"
+                .to_string(),
+        );
     }
 
     None

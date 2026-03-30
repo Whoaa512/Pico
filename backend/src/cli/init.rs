@@ -79,6 +79,36 @@ pub fn run_init() -> anyhow::Result<()> {
 
     let hash = bcrypt::hash(&password, bcrypt::DEFAULT_COST)?;
 
+    let node_path = resolve_binary("node");
+    let npm_path = resolve_binary("npm");
+    let pi_path = resolve_binary("pi");
+
+    if node_path.is_some() {
+        println!("  Node.js found: {}", node_path.as_deref().unwrap());
+    } else {
+        println!("  Node.js: not found (set [paths].node in config.toml later)");
+    }
+    if npm_path.is_some() {
+        println!("  npm found: {}", npm_path.as_deref().unwrap());
+    } else {
+        println!("  npm: not found (set [paths].npm in config.toml later)");
+    }
+    if pi_path.is_some() {
+        println!("  pi found: {}", pi_path.as_deref().unwrap());
+    } else {
+        println!("  pi: not found (set [paths].pi in config.toml later)");
+    }
+
+    let paths = if node_path.is_some() || npm_path.is_some() || pi_path.is_some() {
+        Some(config::PathsConfig {
+            node: node_path,
+            npm: npm_path,
+            pi: pi_path,
+        })
+    } else {
+        None
+    };
+
     let config = config::AppConfig {
         server: config::ServerConfig {
             port,
@@ -100,6 +130,7 @@ pub fn run_init() -> anyhow::Result<()> {
         sessions: None,
         agent: None,
         chat: None,
+        paths,
     };
 
     let toml_str = toml::to_string_pretty(&config)?;
@@ -110,4 +141,13 @@ pub fn run_init() -> anyhow::Result<()> {
     println!("Run: ./pi-server");
 
     Ok(())
+}
+
+fn resolve_binary(name: &str) -> Option<String> {
+    let output = std::process::Command::new("which").arg(name).output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let resolved = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if resolved.is_empty() { None } else { Some(resolved) }
 }

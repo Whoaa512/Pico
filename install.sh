@@ -524,6 +524,95 @@ do_uninstall() {
   success "Pico Server has been uninstalled"
 }
 
+# ── Runtime dependency detection ─────────────────────────────────────────────
+
+detect_and_install_deps() {
+  info "Checking runtime dependencies..."
+  echo ""
+
+  # Node.js
+  if command -v node &>/dev/null; then
+    local node_path node_ver
+    node_path="$(command -v node)"
+    node_ver="$(node --version 2>/dev/null || echo 'unknown')"
+    info "Node.js: ${GREEN}${node_ver}${RESET} (${DIM}${node_path}${RESET})"
+  else
+    err "Node.js is not installed."
+    dim "  Install from: https://nodejs.org"
+    dim "  Or use nvm:   curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.0/install.sh | bash"
+    fatal "Node.js is required. Install it and run this script again."
+  fi
+
+  # npm
+  if command -v npm &>/dev/null; then
+    local npm_path npm_ver
+    npm_path="$(command -v npm)"
+    npm_ver="$(npm --version 2>/dev/null || echo 'unknown')"
+    info "npm: ${GREEN}${npm_ver}${RESET} (${DIM}${npm_path}${RESET})"
+  else
+    err "npm is not installed."
+    fatal "npm is required (comes with Node.js). Install Node.js and try again."
+  fi
+
+  # pi-coding-agent
+  if command -v pi &>/dev/null; then
+    local pi_path pi_ver
+    pi_path="$(command -v pi)"
+    pi_ver="$(pi --version 2>/dev/null | head -1 || echo 'unknown')"
+    info "pi: ${GREEN}${pi_ver}${RESET} (${DIM}${pi_path}${RESET})"
+  else
+    warn "pi-coding-agent is not installed."
+    if confirm "Install pi-coding-agent via npm?" "y"; then
+      info "Running: npm install -g @mariozechner/pi-coding-agent"
+      if npm install -g @mariozechner/pi-coding-agent; then
+        local pi_path pi_ver
+        pi_path="$(command -v pi 2>/dev/null || echo 'unknown')"
+        pi_ver="$(pi --version 2>/dev/null | head -1 || echo 'unknown')"
+        success "pi-coding-agent installed: ${pi_ver} (${pi_path})"
+      else
+        err "Failed to install pi-coding-agent."
+        dim "  Try manually: npm install -g @mariozechner/pi-coding-agent"
+      fi
+    else
+      dim "  Install later: npm install -g @mariozechner/pi-coding-agent"
+    fi
+  fi
+
+  echo ""
+}
+
+update_config_paths() {
+  local config_file="${INSTALL_DIR}/config.toml"
+  [ -f "$config_file" ] || return 0
+
+  local node_path npm_path pi_path
+  node_path="$(command -v node 2>/dev/null || true)"
+  npm_path="$(command -v npm 2>/dev/null || true)"
+  pi_path="$(command -v pi 2>/dev/null || true)"
+
+  [ -z "$node_path" ] && [ -z "$npm_path" ] && [ -z "$pi_path" ] && return 0
+
+  # Remove existing [paths] section if present
+  if grep -q '^\[paths\]' "$config_file" 2>/dev/null; then
+    local tmp
+    tmp="$(mktemp)"
+    awk '
+      /^\[paths\]/ { skip=1; next }
+      /^\[/         { skip=0 }
+      !skip          { print }
+    ' "$config_file" > "$tmp"
+    mv "$tmp" "$config_file"
+  fi
+
+  # Append [paths] section
+  printf '\n[paths]\n' >> "$config_file"
+  [ -n "$node_path" ] && printf 'node = "%s"\n' "$node_path" >> "$config_file"
+  [ -n "$npm_path" ]  && printf 'npm = "%s"\n' "$npm_path" >> "$config_file"
+  [ -n "$pi_path" ]   && printf 'pi = "%s"\n' "$pi_path" >> "$config_file"
+
+  info "Updated [paths] in config.toml"
+}
+
 # ── Install ──────────────────────────────────────────────────────────────────
 
 do_install() {
@@ -572,6 +661,9 @@ do_install() {
   success "Installed ${BINARY} to ${INSTALL_DIR}"
   echo ""
 
+  # Detect runtime dependencies
+  detect_and_install_deps
+
   # First-time setup
   if [ ! -f "${INSTALL_DIR}/config.toml" ]; then
     local tty
@@ -586,6 +678,9 @@ do_install() {
       info "Run 'cd ${INSTALL_DIR} && ./${BINARY} init' to set up credentials."
     fi
   fi
+
+  # Write resolved paths to config.toml (after init creates it)
+  update_config_paths
 
   # Generate wrapper script that sources user shell env
   create_wrapper_script
