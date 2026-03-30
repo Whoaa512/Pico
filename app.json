@@ -2,7 +2,7 @@
   "expo": {
     "name": "Pico",
     "slug": "pi-ui",
-    "version": "1.0.0",
+    "version": "1.8.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "piui",
@@ -32,7 +32,8 @@
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/favicon.png",
+      "name": "Anthaathi Pico"
     },
     "plugins": [
       "expo-router",
