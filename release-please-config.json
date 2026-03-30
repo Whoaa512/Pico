@@ -2,7 +2,7 @@
   "packages": {
     ".": {
       "release-type": "node",
-      "component": "pi-ui",
+      "include-component-in-tag": false,
       "extra-files": [
         {
           "type": "toml",
