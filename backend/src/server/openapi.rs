@@ -217,7 +217,7 @@ use crate::services;
         (name = "tasks", description = "Task runner management"),
     ),
     info(
-        title = "Pi Server",
+        title = "Pico Server",
         version = "0.1.0",
         description = "Management server for pi-coding-agent: auth, package management, and workspace control"
     )

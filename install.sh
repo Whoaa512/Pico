@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ──────────────────────────────────────────────────────────────────────────────
-#  Pi Server Installer
+#  Pico Server Installer
 #
 #  Install:   curl -fsSL https://raw.githubusercontent.com/anthaathi/pi-companion/main/install.sh | bash
 #  Uninstall: curl -fsSL ... | bash -s -- --uninstall
@@ -217,7 +217,7 @@ install_systemd() {
   mkdir -p "$SYSTEMD_UNIT_DIR"
   cat > "${SYSTEMD_UNIT_DIR}/${SYSTEMD_SERVICE}" <<EOF
 [Unit]
-Description=Pi Server – companion server for pi-coding-agent
+Description=Pico Server – companion server for pi-coding-agent
 After=network-online.target
 Wants=network-online.target
 
@@ -441,7 +441,7 @@ add_to_path() {
     shell_name="$(basename "${SHELL:-/bin/bash}")"
 
     echo "" >> "$profile"
-    echo "# Pi Server" >> "$profile"
+    echo "# Pico Server" >> "$profile"
 
     if [ "$shell_name" = "fish" ]; then
       echo "set -gx PATH \"${INSTALL_DIR}\" \$PATH" >> "$profile"
@@ -463,7 +463,7 @@ do_uninstall() {
   local os
   os="$(detect_os)"
 
-  header "Uninstalling Pi Server"
+  header "Uninstalling Pico Server"
 
   if [ ! -d "$INSTALL_DIR" ] && ! service_is_installed "$os"; then
     info "Nothing to uninstall – pi-server is not installed."
@@ -490,12 +490,12 @@ do_uninstall() {
     # Remove the PATH line and the comment above it
     local tmp
     tmp="$(mktemp)"
-    grep -v "# Pi Server" "$profile" | grep -v "${INSTALL_DIR}" > "$tmp" || true
+    grep -v "# Pico Server" "$profile" | grep -v "${INSTALL_DIR}" > "$tmp" || true
     mv "$tmp" "$profile"
     info "Removed PATH entry from ${profile}"
   fi
 
-  success "Pi Server has been uninstalled"
+  success "Pico Server has been uninstalled"
 }
 
 # ── Install ──────────────────────────────────────────────────────────────────
@@ -512,7 +512,7 @@ do_install() {
   require_cmd sed
   require_cmd mktemp
 
-  header "Pi Server Installer"
+  header "Pico Server Installer"
 
   info "Platform: ${os}/${arch}"
 
@@ -584,7 +584,7 @@ do_install() {
 
   echo ""
   success "All done!"
-  dim "  Scan the QR code from the Pi UI app to connect."
+  dim "  Scan the QR code from the Pico app to connect."
   echo ""
 }
 

@@ -99,7 +99,7 @@ export default function DirectConnectScreen() {
 
       await addServer({
         id: serverId,
-        name: existingServer?.name || connectParams.hostname || "Pi Server",
+        name: existingServer?.name || connectParams.hostname || "Pico Server",
         address: baseUrl,
         username: existingServer?.username ?? "",
         password: existingServer?.password ?? "",

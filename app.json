@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "pi-ui",
+    "name": "Pico",
     "slug": "pi-ui",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -51,7 +51,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow Pi to use your camera to scan server QR codes."
+          "cameraPermission": "Allow Pico to use your camera to scan server QR codes."
         }
       ],
       "expo-font",
