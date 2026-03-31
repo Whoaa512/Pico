@@ -1,8 +1,8 @@
-import { memo, useCallback, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Colors, Fonts } from "@/constants/theme";
 import type { ToolCallInfo } from "../../../types";
-import { basename, parseToolArguments } from "../utils";
+import { basename, isToolActive, parseToolArguments } from "../utils";
 import { CodePreview } from "../code-preview";
 import { AnimatedCollapse } from "../animated-collapse";
 import { ToolResultImages } from "./tool-result-images";
@@ -10,15 +10,32 @@ import { ToolResultImages } from "./tool-result-images";
 interface ReadToolCallProps {
   tc: ToolCallInfo;
   isDark: boolean;
+  turnCompleted?: boolean;
 }
 
 export const ReadToolCall = memo(function ReadToolCall({
   tc,
   isDark,
+  turnCompleted = false,
 }: ReadToolCallProps) {
   const colors = isDark ? Colors.dark : Colors.light;
-  const [expanded, setExpanded] = useState(false);
+  const active = isToolActive(tc);
+  const [expanded, setExpanded] = useState(() => active || (!turnCompleted && tc.status === "complete"));
   const toggle = useCallback(() => setExpanded((p) => !p), []);
+
+  useEffect(() => {
+    if (active) setExpanded(true);
+  }, [active]);
+
+  const prevTurnCompleted = useRef(turnCompleted);
+  useEffect(() => {
+    const justCompleted = turnCompleted && !prevTurnCompleted.current;
+    prevTurnCompleted.current = turnCompleted;
+    if (justCompleted && !active) {
+      const timer = setTimeout(() => setExpanded(false), 400);
+      return () => clearTimeout(timer);
+    }
+  }, [turnCompleted, active]);
 
   const parsed = parseToolArguments(tc.arguments);
   const filePath = (parsed.path as string) || "";

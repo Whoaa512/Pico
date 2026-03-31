@@ -1,23 +1,40 @@
-import { memo, useCallback, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Colors, Fonts } from "@/constants/theme";
 import type { ToolCallInfo } from "../../../types";
-import { toolDisplayName } from "../utils";
+import { toolDisplayName, isToolActive } from "../utils";
 import { AnimatedCollapse } from "../animated-collapse";
 import { ToolResultImages } from "./tool-result-images";
 
 interface GenericToolCallProps {
   tc: ToolCallInfo;
   isDark: boolean;
+  turnCompleted?: boolean;
 }
 
 export const GenericToolCall = memo(function GenericToolCall({
   tc,
   isDark,
+  turnCompleted = false,
 }: GenericToolCallProps) {
   const colors = isDark ? Colors.dark : Colors.light;
-  const [expanded, setExpanded] = useState(false);
+  const active = isToolActive(tc);
+  const [expanded, setExpanded] = useState(() => active || (!turnCompleted && tc.status === "complete"));
   const toggle = useCallback(() => setExpanded((p) => !p), []);
+
+  useEffect(() => {
+    if (active) setExpanded(true);
+  }, [active]);
+
+  const prevTurnCompleted = useRef(turnCompleted);
+  useEffect(() => {
+    const justCompleted = turnCompleted && !prevTurnCompleted.current;
+    prevTurnCompleted.current = turnCompleted;
+    if (justCompleted && !active) {
+      const timer = setTimeout(() => setExpanded(false), 400);
+      return () => clearTimeout(timer);
+    }
+  }, [turnCompleted, active]);
 
   const hasImages = !!(tc.resultImages && tc.resultImages.length > 0);
   const hasResult = !!tc.result || !!tc.partialResult;
