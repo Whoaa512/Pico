@@ -228,63 +228,6 @@ pub fn get_session_messages_paginated(
     })
 }
 
-pub fn get_session_messages_after(
-    base_path: &Path,
-    session_id: &str,
-    last_message_id: Option<&str>,
-) -> Option<Vec<Value>> {
-    let file_path = find_session_file_anywhere(base_path, session_id)?;
-    let content = std::fs::read_to_string(&file_path).ok()?;
-
-    let mut messages = Vec::new();
-    let mut found_marker = last_message_id.is_none();
-
-    for line in content.lines().skip(1) {
-        if line.trim().is_empty() {
-            continue;
-        }
-
-        let Ok(val) = serde_json::from_str::<Value>(line) else {
-            continue;
-        };
-
-        if val.get("type").and_then(|v| v.as_str()) != Some("message") {
-            continue;
-        }
-
-        let Some(message) = val.get("message") else {
-            continue;
-        };
-
-        let entry_id = val.get("id").and_then(|v| v.as_str());
-
-        if !found_marker {
-            let msg_id = message.get("id").and_then(|v| v.as_str())
-                .or_else(|| message.get("messageId").and_then(|v| v.as_str()))
-                .or_else(|| message.get("entryId").and_then(|v| v.as_str()))
-                .or(entry_id);
-
-            if msg_id == last_message_id {
-                found_marker = true;
-            }
-            continue;
-        }
-
-        let mut msg = message.clone();
-        if let Some(eid) = entry_id {
-            if let Some(obj) = msg.as_object_mut() {
-                if !obj.contains_key("id") && !obj.contains_key("entryId") {
-                    obj.insert("entryId".to_string(), Value::String(eid.to_string()));
-                }
-            }
-        }
-
-        messages.push(msg);
-    }
-
-    Some(messages)
-}
-
 pub fn get_session_tree(base_path: &Path, cwd: &str, session_id: &str) -> Option<Vec<SessionTreeNode>> {
     let entries = get_session_entries(base_path, cwd, session_id)?;
 

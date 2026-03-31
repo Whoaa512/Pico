@@ -50,7 +50,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    paddingVertical: 3,
+    paddingVertical: 2,
   },
   fileName: {
     fontSize: 12,
@@ -59,7 +59,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   previewWrap: {
-    marginTop: 4,
+    marginTop: 8,
     marginLeft: 12,
   },
 });

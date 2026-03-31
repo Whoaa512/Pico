@@ -32,6 +32,7 @@ export type {
   PathCompletion,
   SessionDetail,
   SessionEntry,
+  SessionHistoryResponse,
   SessionListItem,
   SessionTreeNode,
   TaskDefinition,

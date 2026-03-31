@@ -32,6 +32,7 @@ import type {
   FsEntry,
   FsUploadResponse,
   PathCompletion,
+  SessionHistoryResponse,
 } from "../generated/types.gen";
 import type { ImageContent } from "../types/stream-events";
 
@@ -1258,6 +1259,41 @@ export class ApiClient {
   async getSessionMode(sessionId: string): Promise<{ session_id: string; mode: AgentMode | null }> {
     const result = await sdk.getSessionMode({ path: { session_id: sessionId } });
     return unwrapResult<{ session_id: string; mode: AgentMode | null }>(result);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Session history (REST)
+  // ---------------------------------------------------------------------------
+
+  async getSessionHistory(
+    sessionId: string,
+    params?: { before?: string; limit?: number },
+  ): Promise<SessionHistoryResponse> {
+    const result = await sdk.sessionHistory({
+      path: { session_id: sessionId },
+      query: { before: params?.before, limit: params?.limit },
+    });
+    return unwrapResult<SessionHistoryResponse>(result);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Active session (per-connection)
+  // ---------------------------------------------------------------------------
+
+  async setActiveSession(connectionId: string, sessionId: string | null): Promise<void> {
+    const url = this.buildApiUrl("/api/stream-active-session");
+    const response = await this.authFetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        connection_id: connectionId,
+        session_id: sessionId,
+      }),
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => null);
+      throw new Error((body as any)?.error ?? `setActiveSession failed (${response.status})`);
+    }
   }
 
   // ---------------------------------------------------------------------------

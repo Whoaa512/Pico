@@ -257,7 +257,7 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 16,
     paddingVertical: 4,
-    gap: 8,
+    gap: 12,
   },
   textBlock: {},
   errorBlock: {

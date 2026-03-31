@@ -486,12 +486,6 @@ impl AgentManager {
         get_buffered_events_for_session(buffer.make_contiguous(), session_id)
     }
 
-    pub async fn get_session_info(&self, session_id: &str) -> Option<AgentSessionInfo> {
-        let resolved_id = self.resolve_session_id(session_id).await;
-        let sessions = self.sessions.read().await;
-        sessions.get(&resolved_id).map(build_session_info)
-    }
-
     pub fn start_idle_cleanup_task(&self) {
         let manager = self.clone();
 

@@ -144,7 +144,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-start",
     gap: 6,
-    paddingVertical: 3,
+    paddingVertical: 2,
   },
   headerText: {
     flex: 1,
@@ -174,7 +174,7 @@ const styles = StyleSheet.create({
   detailBox: {
     borderRadius: 8,
     padding: 10,
-    marginTop: 4,
+    marginTop: 8,
     marginLeft: 12,
   },
   section: {

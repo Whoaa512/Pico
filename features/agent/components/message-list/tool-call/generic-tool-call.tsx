@@ -52,7 +52,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    paddingVertical: 3,
+    paddingVertical: 2,
   },
   name: {
     fontSize: 12,
@@ -62,7 +62,7 @@ const styles = StyleSheet.create({
   resultBox: {
     borderRadius: 6,
     padding: 8,
-    marginTop: 4,
+    marginTop: 8,
     marginLeft: 12,
   },
   resultText: {

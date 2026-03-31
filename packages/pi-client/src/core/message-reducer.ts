@@ -1,5 +1,5 @@
 import type { ChatMessage, ToolCallInfo, ToolResultImage, MessageUsageInfo, AgentMode, PendingExtensionUiRequest, SubagentMeta } from "../types/chat-message";
-import type { AgentStreamEvent, StreamEventEnvelope } from "../types/stream-events";
+import type { AgentStreamEvent, AgentStateData, StreamEventEnvelope } from "../types/stream-events";
 
 export interface SessionState {
   messages: ChatMessage[];
@@ -11,6 +11,7 @@ export interface SessionState {
   oldestEntryId: string | null;
   mode: AgentMode;
   pendingExtensionUiRequest: PendingExtensionUiRequest | null;
+  agentState: AgentStateData | null;
 }
 
 export function createEmptySessionState(): SessionState {
@@ -18,6 +19,7 @@ export function createEmptySessionState(): SessionState {
     messages: [],
     isStreaming: false,
     isReady: false,
+    agentState: null,
     isLoading: false,
     isLoadingOlderMessages: false,
     hasMoreMessages: false,
@@ -227,11 +229,6 @@ export function reduceStreamEvent(state: SessionState, envelope: StreamEventEnve
     case "message_update": {
       if (event.type !== "message_update") break;
       let idx = findLastStreamingIndex(messages);
-      if (idx === -1) {
-        for (let j = messages.length - 1; j >= 0; j--) {
-          if (messages[j]!.role === "assistant") { idx = j; break; }
-        }
-      }
       if (idx === -1) {
         messages = [...messages, {
           id: `assistant-${envelope.id}`,
@@ -446,12 +443,7 @@ export function reduceStreamEvent(state: SessionState, envelope: StreamEventEnve
     }
 
     case "agent_state": {
-      // agent_state is emitted on session touch/create with full session state
-      // from the backend. It carries isStreaming, mode, model info, etc.
-      const data = event as unknown as {
-        isStreaming?: boolean;
-        mode?: string;
-      };
+      const data = event as unknown as AgentStateData;
       if (typeof data.isStreaming === "boolean") {
         isStreaming = data.isStreaming;
         if (!isStreaming) {
@@ -463,7 +455,7 @@ export function reduceStreamEvent(state: SessionState, envelope: StreamEventEnve
           mode = data.mode;
         }
       }
-      break;
+      return { ...state, messages, isStreaming, mode, pendingExtensionUiRequest, agentState: data };
     }
 
     case "extension_ui_request": {

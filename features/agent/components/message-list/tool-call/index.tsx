@@ -233,13 +233,12 @@ const GroupedToolCalls = memo(function GroupedToolCalls({
 
 const styles = StyleSheet.create({
   container: {
-    gap: 8,
+    gap: 12,
   },
   groupHeader: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    paddingVertical: 3,
   },
   labelRow: {
     flexDirection: "row",
