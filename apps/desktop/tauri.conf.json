@@ -1,0 +1,32 @@
+{
+  "productName": "Pico",
+  "version": "1.11.0",
+  "identifier": "com.anthaathi.pico.desktop",
+  "build": {
+    "beforeDevCommand": "",
+    "devUrl": "http://localhost:8081",
+    "beforeBuildCommand": "cd ../.. && yarn web:build",
+    "frontendDist": "../../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Pico",
+        "width": 1200,
+        "height": 800,
+        "minWidth": 400,
+        "minHeight": 600
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "app-icons/icon.png"
+    ]
+  }
+}

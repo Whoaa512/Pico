@@ -47,6 +47,7 @@ backend/config.toml
 backend/*.db
 /pi-server.db
 backend/target/
+target/
 unsloth_compiled_cache/
 
 # generated native folders
