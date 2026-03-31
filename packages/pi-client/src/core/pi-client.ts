@@ -29,6 +29,7 @@ export class PiClient {
   private _viewedSessionId: string | null = null;
   private _pendingActiveSession: string | null | undefined = undefined;
   private readonly _highWaterMarks = new Map<string, number>();
+  private readonly _deltaHighWaterMarks = new Map<string, number>();
 
   constructor(config: PiClientConfig) {
     this._config = config;
@@ -61,7 +62,6 @@ export class PiClient {
 
       if (sessionId) {
         this._fetchAndApplyHistory(sessionId).then(() => {
-          this._highWaterMarks.delete(sessionId);
           this._sendActiveSession(sessionId);
         });
       }
@@ -427,6 +427,9 @@ export class PiClient {
         return;
       }
       this._highWaterMarks.set(sessionId, envelope.id);
+      if (envelope.type === "message_update" || envelope.type === "tool_execution_update") {
+        this._deltaHighWaterMarks.set(sessionId, envelope.id);
+      }
     }
 
     const subject = this._getOrCreateSessionSubject(sessionId);
@@ -464,9 +467,6 @@ export class PiClient {
   // ---------------------------------------------------------------------------
 
   private _setActiveSessionOnBackend(sessionId: string | null): void {
-    if (sessionId) {
-      this._highWaterMarks.delete(sessionId);
-    }
     const connectionId = this._stream.connectionId;
     if (!connectionId) {
       this._pendingActiveSession = sessionId;
@@ -479,8 +479,22 @@ export class PiClient {
   private _sendActiveSession(sessionId: string | null): void {
     const connectionId = this._stream.connectionId;
     if (!connectionId) return;
-    if (__DEV__) console.log("[pi:active-session]", "set", sessionId, "conn=", connectionId);
-    this.api.setActiveSession(connectionId, sessionId).catch((err) => {
+    const fromEventId = sessionId ? this._highWaterMarks.get(sessionId) : undefined;
+    const fromDeltaEventId = sessionId ? this._deltaHighWaterMarks.get(sessionId) : undefined;
+    if (__DEV__) {
+      console.log(
+        "[pi:active-session]",
+        "set",
+        sessionId,
+        "conn=",
+        connectionId,
+        "from=",
+        fromEventId,
+        "fromDelta=",
+        fromDeltaEventId,
+      );
+    }
+    this.api.setActiveSession(connectionId, sessionId, fromEventId, fromDeltaEventId).catch((err) => {
       if (__DEV__) console.warn("[pi:active-session]", "failed", err);
     });
   }
@@ -516,6 +530,7 @@ export class PiClient {
       }
       this._knownStreamSessionIds.clear();
       this._highWaterMarks.clear();
+      this._deltaHighWaterMarks.clear();
       this._serverRestart$.next();
     }
     this._instanceId = instanceId;

@@ -178,6 +178,8 @@ pub struct WsSessionStreamQuery {
 pub struct SetActiveSessionRequest {
     pub connection_id: String,
     pub session_id: Option<String>,
+    pub from_event_id: Option<u64>,
+    pub from_delta_event_id: Option<u64>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]

@@ -481,9 +481,19 @@ impl AgentManager {
         }
     }
 
-    pub async fn get_buffered_session_events(&self, session_id: &str) -> Vec<StreamEvent> {
+    pub async fn get_buffered_session_events(
+        &self,
+        session_id: &str,
+        from_event_id: Option<u64>,
+        from_delta_event_id: Option<u64>,
+    ) -> Vec<StreamEvent> {
         let mut buffer = self.event_buffer.lock().await;
-        get_buffered_events_for_session(buffer.make_contiguous(), session_id)
+        get_buffered_events_for_session(
+            buffer.make_contiguous(),
+            session_id,
+            from_event_id,
+            from_delta_event_id,
+        )
     }
 
     pub fn start_idle_cleanup_task(&self) {
@@ -1235,9 +1245,15 @@ pub fn is_session_only_event(event_type: &str) -> bool {
     SESSION_ONLY_EVENT_TYPES.contains(&event_type)
 }
 
+fn is_replay_delta_event(event_type: &str) -> bool {
+    event_type == "message_update" || event_type == "tool_execution_update"
+}
+
 pub fn get_buffered_events_for_session(
     events: &[StreamEvent],
     session_id: &str,
+    from_event_id: Option<u64>,
+    from_delta_event_id: Option<u64>,
 ) -> Vec<StreamEvent> {
     let session_events: Vec<&StreamEvent> = events
         .iter()
@@ -1249,15 +1265,23 @@ pub fn get_buffered_events_for_session(
         .rposition(|e| {
             e.event_type == "turn_end"
                 || e.event_type == "agent_end"
-                || e.event_type == "message_end"
         });
 
-    match last_boundary {
-        Some(idx) => session_events[idx + 1..]
-            .iter()
-            .cloned()
-            .cloned()
-            .collect(),
-        None => session_events.into_iter().cloned().collect(),
-    }
+    let relevant = match last_boundary {
+        Some(idx) => &session_events[idx + 1..],
+        None => session_events.as_slice(),
+    };
+
+    relevant
+        .iter()
+        .filter(|event| {
+            let event = **event;
+            let after_general = from_event_id.is_none_or(|from| event.id > from);
+            let after_delta = is_replay_delta_event(&event.event_type)
+                && from_delta_event_id.is_some_and(|from| event.id > from);
+            after_general || after_delta
+        })
+        .cloned()
+        .cloned()
+        .collect()
 }

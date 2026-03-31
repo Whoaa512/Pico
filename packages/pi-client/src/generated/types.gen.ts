@@ -495,6 +495,8 @@ export type SessionTreeNode = {
 
 export type SetActiveSessionRequest = {
     connection_id: string;
+    from_delta_event_id?: number | null;
+    from_event_id?: number | null;
     session_id?: string | null;
 };
 

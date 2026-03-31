@@ -48,10 +48,6 @@ impl SseConnection {
 
         state.active = session_id;
     }
-
-    pub async fn active_session_id(&self) -> Option<String> {
-        self.session_state.read().await.active.clone()
-    }
 }
 
 #[derive(Clone)]

@@ -1195,7 +1195,10 @@ pub async fn set_active_session(
     conn.set_active(req.session_id.clone()).await;
 
     if let Some(ref session_id) = req.session_id {
-        let buffered = state.agent.get_buffered_session_events(session_id).await;
+        let buffered = state
+            .agent
+            .get_buffered_session_events(session_id, req.from_event_id, req.from_delta_event_id)
+            .await;
         let collapsed = collapse_buffered_events(buffered);
         for event in collapsed {
             let val = stream_event_value(&event);
@@ -1424,7 +1427,10 @@ pub async fn session_stream(
     let mut rx = state.agent.subscribe();
 
     let buffered_events = collapse_buffered_events(
-        state.agent.get_buffered_session_events(&session_id).await,
+        state
+            .agent
+            .get_buffered_session_events(&session_id, None, None)
+            .await,
     );
     let high_water_mark = buffered_events.last().map(|e| e.id).unwrap_or(0);
 
@@ -1519,7 +1525,10 @@ async fn handle_ws_session_stream(
     let mut rx = state.agent.subscribe();
 
     let buffered_events = collapse_buffered_events(
-        state.agent.get_buffered_session_events(&session_id).await,
+        state
+            .agent
+            .get_buffered_session_events(&session_id, None, None)
+            .await,
     );
     let high_water_mark = buffered_events.last().map(|e| e.id).unwrap_or(0);
 

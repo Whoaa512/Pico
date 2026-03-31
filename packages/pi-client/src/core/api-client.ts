@@ -1280,7 +1280,12 @@ export class ApiClient {
   // Active session (per-connection)
   // ---------------------------------------------------------------------------
 
-  async setActiveSession(connectionId: string, sessionId: string | null): Promise<void> {
+  async setActiveSession(
+    connectionId: string,
+    sessionId: string | null,
+    fromEventId?: number,
+    fromDeltaEventId?: number,
+  ): Promise<void> {
     const url = this.buildApiUrl("/api/stream-active-session");
     const response = await this.authFetch(url, {
       method: "POST",
@@ -1288,6 +1293,8 @@ export class ApiClient {
       body: JSON.stringify({
         connection_id: connectionId,
         session_id: sessionId,
+        from_event_id: fromEventId,
+        from_delta_event_id: fromDeltaEventId,
       }),
     });
     if (!response.ok) {
