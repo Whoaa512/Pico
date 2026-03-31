@@ -5,6 +5,16 @@ use crate::models::{OperationResult, PackageStatus};
 
 pub fn get_status(config: &PackageConfig, app_config: &AppConfig) -> PackageStatus {
     let name = &config.name;
+
+    if let Some(version) = get_custom_binary_version(app_config) {
+        return PackageStatus {
+            name: name.clone(),
+            installed: true,
+            installed_version: Some(version),
+            latest_version: None,
+        };
+    }
+
     let npm = app_config.npm_binary();
     let installed_version = get_installed_version(name, &npm);
     let latest_version = get_latest_version(name, &npm);
@@ -56,6 +66,29 @@ fn run_npm_command(operation: &str, cmd: &str) -> OperationResult {
             output: format!("Failed to execute command: {e}"),
         },
     }
+}
+
+fn has_custom_binary(app_config: &AppConfig) -> bool {
+    app_config.paths.as_ref().and_then(|p| p.pi.as_ref()).is_some()
+        || app_config.agent.as_ref().and_then(|a| a.pi_binary.as_ref()).is_some()
+}
+
+fn get_custom_binary_version(app_config: &AppConfig) -> Option<String> {
+    if !has_custom_binary(app_config) {
+        return None;
+    }
+
+    let bin = app_config.pi_binary();
+    let output = Command::new(&bin).arg("--version").output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .map(str::trim)
+        .find(|l| !l.is_empty())
+        .map(|l| l.to_string())
 }
 
 fn get_installed_version(package_name: &str, npm: &str) -> Option<String> {
