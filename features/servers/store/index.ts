@@ -60,6 +60,12 @@ export const useServersStore = create<ServersState>((set, get) => ({
   load: async () => {
     const raw = await readFromStore();
     const servers = raw.map(({ username, password, ...s }: any) => ({ ...s, address: stripTrailingSlashes(s.address) }));
+    if (servers.length === 0 && Platform.OS === 'web') {
+      const defaultServer: Server = { id: 'local', name: 'Local', address: 'http://127.0.0.1:5454' };
+      set({ servers: [defaultServer], loaded: true });
+      await writeToStore([defaultServer]);
+      return;
+    }
     set({ servers, loaded: true });
     if (raw.some((s: any) => s.username || s.password)) {
       await writeToStore(servers);

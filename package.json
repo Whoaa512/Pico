@@ -16,6 +16,7 @@
     "api:generate": "cd packages/pi-client && yarn api:generate",
     "web:build": "npx expo export --platform web --clear",
     "backend:build": "cd backend && cargo build --release",
+    "dev": "cd apps/desktop && cargo tauri dev",
     "desktop": "cd apps/desktop && cargo tauri dev",
     "desktop:build": "cd apps/desktop && cargo tauri build",
     "build:prod": "yarn web:build && yarn backend:build"

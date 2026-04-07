@@ -3,7 +3,7 @@
   "version": "1.11.0",
   "identifier": "com.anthaathi.pico.desktop",
   "build": {
-    "beforeDevCommand": "",
+    "beforeDevCommand": "cd ../.. && yarn web",
     "devUrl": "http://localhost:8081",
     "beforeBuildCommand": "cd ../.. && yarn web:build",
     "frontendDist": "../../dist"
