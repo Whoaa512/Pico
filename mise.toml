@@ -1,9 +1,33 @@
 [tools]
 rust = "latest"
 
+[tasks.dev]
+description = "Run backend + web dev server"
+run = "node scripts/dev.mjs dev"
+
+[tasks."dev:web"]
+description = "Run only the Expo web dev server"
+run = "node scripts/dev.mjs web"
+
+[tasks."dev:backend"]
+description = "Run only the Rust backend"
+run = "node scripts/dev.mjs backend"
+
 [tasks.desktop]
 description = "Run desktop app in dev mode (Tauri + hot reload)"
 run = "cd apps/desktop && cargo tauri dev"
+
+[tasks.build]
+description = "Build web assets then backend (production)"
+run = "node scripts/dev.mjs build"
+
+[tasks."build:web"]
+description = "Export web assets to dist/"
+run = "node scripts/dev.mjs build:web"
+
+[tasks."build:backend"]
+description = "Build Rust backend (release)"
+run = "node scripts/dev.mjs build:backend"
 
 [tasks."desktop:build"]
 description = "Build desktop app for production"
