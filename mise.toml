@@ -1,2 +1,10 @@
 [tools]
 rust = "latest"
+
+[tasks.desktop]
+description = "Run desktop app in dev mode (Tauri + hot reload)"
+run = "cd apps/desktop && cargo tauri dev"
+
+[tasks."desktop:build"]
+description = "Build desktop app for production"
+run = "cd apps/desktop && cargo tauri build"
